@@ -1,102 +1,95 @@
-import { createTool } from '@mastra/core/tools';
-import { z } from 'zod';
+// Import tool creators
+import { createGraphQLQueryTool } from './query-graphql';
+import { createGraphQLIntrospectionTool } from './introspect-graphql';
+import { createVectorQueryTool } from './get-vector-context';
 
-interface GeocodingResponse {
-  results: {
-    latitude: number;
-    longitude: number;
-    name: string;
-  }[];
-}
-interface WeatherResponse {
-  current: {
-    time: string;
-    temperature_2m: number;
-    apparent_temperature: number;
-    relative_humidity_2m: number;
-    wind_speed_10m: number;
-    wind_gusts_10m: number;
-    weather_code: number;
-  };
-}
 
-export const weatherTool = createTool({
-  id: 'get-weather',
-  description: 'Get current weather for a location',
-  inputSchema: z.object({
-    location: z.string().describe('City name'),
-  }),
-  outputSchema: z.object({
-    temperature: z.number(),
-    feelsLike: z.number(),
-    humidity: z.number(),
-    windSpeed: z.number(),
-    windGust: z.number(),
-    conditions: z.string(),
-    location: z.string(),
-  }),
-  execute: async ({ context }) => {
-    return await getWeather(context.location);
-  },
-});
+// Environment variables
+const GITCOIN_INDEXER_API_URL = process.env.GITCOIN_INDEXER_API_URL || 'https://beta.indexer.gitcoin.co/v1/graphql';
+const POSTGRES_URL = process.env.POSTGRES_URL;
+const GITCOIN_DOCS_INDEX = process.env.GITCOIN_DOCS_INDEX || 'gitcoin_docs';
+const GITCOIN_SOURCE_INDEX = process.env.GITCOIN_SOURCE_INDEX || 'gitcoin_source';
+const SUCCESSFUL_QUERIES_INDEX = process.env.SUCCESSFUL_QUERIES_INDEX || 'successful_gql_queries';
+const API_TOKEN = process.env.API_TOKEN || '';
 
-const getWeather = async (location: string) => {
-  const geocodingUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1`;
-  const geocodingResponse = await fetch(geocodingUrl);
-  const geocodingData = (await geocodingResponse.json()) as GeocodingResponse;
-
-  if (!geocodingData.results?.[0]) {
-    throw new Error(`Location '${location}' not found`);
+/**
+ * Create and export GraphQL query tool instance
+ */
+export const graphqlQuery = createGraphQLQueryTool(
+  GITCOIN_INDEXER_API_URL,
+  {
+    allowMutations: false,
+    defaultHeaders: {
+      "Authorization": API_TOKEN ? `Bearer ${API_TOKEN}` : ''
+    },
+    successfulQueriesIndexName: SUCCESSFUL_QUERIES_INDEX,
+    pgConnectionString: POSTGRES_URL
   }
+);
 
-  const { latitude, longitude, name } = geocodingData.results[0];
+/**
+ * Create and export GraphQL introspection tool instance
+ */
+export const graphqlIntrospection = createGraphQLIntrospectionTool(
+  GITCOIN_INDEXER_API_URL,
+  {
+    defaultHeaders: {
+      "Authorization": API_TOKEN ? `Bearer ${API_TOKEN}` : ''
+    }
+  }
+);
 
-  const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_gusts_10m,weather_code`;
 
-  const response = await fetch(weatherUrl);
-  const data = (await response.json()) as WeatherResponse;
+if (!POSTGRES_URL) {
+  throw new Error('POSTGRES_URL is not set. Please set it to use vector query tools.');
+}
 
-  return {
-    temperature: data.current.temperature_2m,
-    feelsLike: data.current.apparent_temperature,
-    humidity: data.current.relative_humidity_2m,
-    windSpeed: data.current.wind_speed_10m,
-    windGust: data.current.wind_gusts_10m,
-    conditions: getWeatherCondition(data.current.weather_code),
-    location: name,
-  };
+/**
+ * Export vector query tools conditionally
+ */
+
+const dynamicGitcoinDocs = createVectorQueryTool(
+  POSTGRES_URL,
+  GITCOIN_DOCS_INDEX,
+  {
+    description: 'Retrieve relevant information about the Gitcoin Grants ecosystem, how the protocol works, and how to get involved from a grantee, community member, or just an interested party',
+    topK: 5,
+    threshold: 0.6
+  }
+)
+
+const dynamicGitcoinSourceCode = createVectorQueryTool(
+  POSTGRES_URL,
+  GITCOIN_SOURCE_INDEX,
+  {
+    description: 'Retrieve relevant source code that makes up the mechanisms behind Gitcoin Grants Rounds. Useful to understand how the protocol works and how to contribute to it',
+    topK: 3,
+    threshold: 0.7
+  }
+);
+
+export {
+  dynamicGitcoinDocs,
+  dynamicGitcoinSourceCode
 };
 
-function getWeatherCondition(code: number): string {
-  const conditions: Record<number, string> = {
-    0: 'Clear sky',
-    1: 'Mainly clear',
-    2: 'Partly cloudy',
-    3: 'Overcast',
-    45: 'Foggy',
-    48: 'Depositing rime fog',
-    51: 'Light drizzle',
-    53: 'Moderate drizzle',
-    55: 'Dense drizzle',
-    56: 'Light freezing drizzle',
-    57: 'Dense freezing drizzle',
-    61: 'Slight rain',
-    63: 'Moderate rain',
-    65: 'Heavy rain',
-    66: 'Light freezing rain',
-    67: 'Heavy freezing rain',
-    71: 'Slight snow fall',
-    73: 'Moderate snow fall',
-    75: 'Heavy snow fall',
-    77: 'Snow grains',
-    80: 'Slight rain showers',
-    81: 'Moderate rain showers',
-    82: 'Violent rain showers',
-    85: 'Slight snow showers',
-    86: 'Heavy snow showers',
-    95: 'Thunderstorm',
-    96: 'Thunderstorm with slight hail',
-    99: 'Thunderstorm with heavy hail',
-  };
-  return conditions[code] || 'Unknown';
-}
+/**
+ * Export all tool creators for custom usage
+ */
+// export {
+//   createGraphQLQueryTool,
+//   createGraphQLIntrospectionTool,
+//   createVectorQueryTool
+// };
+
+/**
+ * Create a combined tools object with all available tools
+ */
+// const tools = {
+//   graphqlQuery,
+//   graphqlIntrospection,
+//   ...(dynamicGitcoinDocs ? { dynamicGitcoinDocs } : {}),
+//   ...(dynamicGitcoinSourceCode ? { dynamicGitcoinSourceCode } : {})
+// };
+
+// export default tools;

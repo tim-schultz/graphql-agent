@@ -269,20 +269,3 @@ export const createGraphQLIntrospectionTool = (
     }
   });
 };
-
-
-const graphqlIntrospectionTool = createGraphQLIntrospectionTool(
-    "https://beta.indexer.gitcoin.co/v1/graphql",
-    {
-      
-    }
-  );
-  if (!graphqlIntrospectionTool) {
-    throw new Error("Failed to create GraphQL introspection tool");
-  }
-
-  const toolResponse = await graphqlIntrospectionTool.execute({
-    context: {}
-  });
-
-  console.log("Tool response:", toolResponse);

@@ -1,6 +1,6 @@
 import { google } from '@ai-sdk/google';
 import { Agent } from '@mastra/core/agent';
-import { weatherTool } from '../tools';
+import { graphqlQuery, dynamicGitcoinDocs, dynamicGitcoinSourceCode, graphqlIntrospection } from '../tools';
 
 export const weatherAgent = new Agent({
   name: 'Weather Agent',
@@ -17,5 +17,5 @@ export const weatherAgent = new Agent({
       Use the weatherTool to fetch current weather data.
 `,
   model: google('gemini-1.5-pro-latest'),
-  tools: { weatherTool },
+  tools: { graphqlQuery, dynamicGitcoinDocs, dynamicGitcoinSourceCode, graphqlIntrospection },
 });

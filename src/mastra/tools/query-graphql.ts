@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { parse } from "graphql/language";
+import { parse } from "graphql";
 import { embedSingleString } from "../../embed/content-processor";
 
 
