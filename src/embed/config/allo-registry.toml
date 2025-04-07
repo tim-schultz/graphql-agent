@@ -1,0 +1,15 @@
+# Configuration for Etherscan Embedder Script
+
+[etherscan]
+# Base URL for the Etherscan-compatible API (e.g., https://api.etherscan.io, https://api-optimistic.etherscan.io)
+base_url = "https://api-optimistic.etherscan.io"
+# Your Etherscan API Key
+api_key = "UX3B75SA4KXYXY65UHXE3UQD2QJ6BB59XA"
+
+# [openai]
+# # Your OpenAI API Key for generating embeddings
+# api_key = "YOUR_OPENAI_API_KEY" # Replace with your actual key
+
+# [database]
+# # Connection string for your PostgreSQL database
+# url = "YOUR_POSTGRES_CONNECTION_STRING" # e.g., "postgres://user:password@host:port/database"

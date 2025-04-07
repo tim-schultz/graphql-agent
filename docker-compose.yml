@@ -1,0 +1,96 @@
+version: "3.8"
+services:
+  # Redis service for state management
+  redis:
+    image: redis:7-alpine
+    container_name: smart_contract_boi_agent_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-smart_contract_boi_agent_default_pass}
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "-a",
+          "${REDIS_PASSWORD:-smart_contract_boi_agent_default_pass}",
+          "ping",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - smart_contract_boi_agent_network
+
+  # Redis Commander - Web UI for Redis (optional but helpful for development)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: smart_contract_boi_agent_redis_ui
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0:${REDIS_PASSWORD:-smart_contract_boi_agent_default_pass}
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - smart_contract_boi_agent_network
+
+  # PostgreSQL database with pgvector extension for vector operations
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: smart_contract_boi_agent_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-smart_contract_boi_agent}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-smart_contract_boi_agent}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smart_contract_boi_agent_network
+  # PgAdmin - PostgreSQL Admin Interface (optional but helpful for development)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: smart_contract_boi_agent_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "8082:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - smart_contract_boi_agent_network
+
+volumes:
+  redis_data:
+    name: smart_contract_boi_agent_redis_data
+  postgres_data:
+    name: smart_contract_boi_agent_postgres_data
+  pgadmin_data:
+    name: smart_contract_boi_agent_pgadmin_data
+
+networks:
+  smart_contract_boi_agent_network:
+    name: smart_contract_boi_agent_network
