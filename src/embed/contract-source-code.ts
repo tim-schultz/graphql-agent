@@ -462,7 +462,7 @@ async function main() {
   const etherscanBaseUrl = config.etherscan.base_url;
   const etherscanApiKey = config.etherscan.api_key;
   const pgConnectionString = process.env.POSTGRES_URL;
-  const indexName = 'contract_source_code'; // Vector index name
+  const indexName = 'gitcoin_source_code';
 
   // Get contract address from command line arguments (excluding --config arg)
   const contractAddress = process.argv.find(

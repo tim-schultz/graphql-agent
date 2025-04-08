@@ -45,33 +45,37 @@ function parseAndMergeHeaders(
 function processGraphQLResponse(
   result: { 
     success: boolean;
-    data: any;
+    data?: any;
     errors: any[] | null;
     message: string;
   },
   options: {
     maxTokens: number;
-    tokenBuffer: number;
     truncationSuffix: string;
   }
 ) {
-  // Implementation of sanitization logic
-  // This is a simplified version - replace with actual implementation
   let responseData = result.data;
+  if (!responseData) {
+    return {
+      success: result.success,
+      data: responseData,
+      errors: result.errors,
+      message: result.message
+    };
+  }
   
   // Simple approach to estimate size - in a real implementation, use a token counter
   const jsonString = JSON.stringify(responseData);
-  if (jsonString.length > options.maxTokens * 4) { // Rough char-to-token ratio
+  if (jsonString && jsonString.split(" ").length > options.maxTokens) { // Rough char-to-token ratio
     // Truncate data
-    result.message += ` ${options.truncationSuffix}`;
-    // In a real implementation, implement a more sophisticated truncation strategy
+    const truncatedTokens = jsonString.split(" ").slice(0, options.maxTokens);
+    responseData = truncatedTokens.join(" ") + options.truncationSuffix;
   }
   
   return {
     success: result.success,
     data: responseData,
     errors: result.errors,
-    message: result.message
   };
 }
 
@@ -96,8 +100,7 @@ export const createGraphQLQueryTool = (
 ) => {
   const {
     allowMutations = false,
-    maxTokens = 65000,
-    tokenBuffer = 0.2,
+    maxTokens = 25000,
     truncationSuffix = '... [content truncated due to size limits]',
     defaultHeaders = {},
     successfulQueriesIndexName,
@@ -107,7 +110,6 @@ export const createGraphQLQueryTool = (
   // Sanitization options
   const sanitizeOptions = {
     maxTokens,
-    tokenBuffer,
     truncationSuffix
   };
   

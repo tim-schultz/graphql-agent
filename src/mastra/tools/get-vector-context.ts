@@ -40,6 +40,25 @@ export const createVectorQueryTool = (
         'The user query or topic to find relevant context for. This should be a concise summary or question.'
       ),
     }),
+    outputSchema: z.object({
+      context: z.string().describe(
+        'The context retrieved from the vector database. This will contain the most relevant information based on the query.'
+      ),
+      query: z.string().describe(
+        'The original query that was used to fetch the context. This is useful for reference and debugging.'
+      ),
+      results: z.array(
+        z.object({
+          text: z.string().describe(
+            'The text of the document that was retrieved from the vector database.'
+          ),
+          similarity: z.number().describe(
+            'The similarity score of the retrieved document with respect to the query. This indicates how relevant the document is to the query.'
+          ),
+          metadata: z.object({})
+        }),
+      )
+    }),
     description,
     execute: async ({ context: { query } }) => {
       try {
@@ -56,14 +75,14 @@ export const createVectorQueryTool = (
           indexName: indexName,
           queryVector: embedding,
           topK: topK,
-          // Optional filter by similarity threshold
-          filter: threshold > 0 ? {
-            $custom: {
-              operator: ">",
-              value: threshold,
-              field: "score" // This assumes the similarity score field is named 'score'
-            }
-          } : undefined
+          // // Optional filter by similarity threshold
+          // filter: threshold > 0 ? {
+          //   $custom: {
+          //     operator: ">",
+          //     value: threshold,
+          //     field: "score" // This assumes the similarity score field is named 'score'
+          //   }
+          // } : undefined
         });
 
         if (!results || results.length === 0) {

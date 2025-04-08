@@ -8,7 +8,7 @@ import { createVectorQueryTool } from './get-vector-context';
 const GITCOIN_INDEXER_API_URL = process.env.GITCOIN_INDEXER_API_URL || 'https://beta.indexer.gitcoin.co/v1/graphql';
 const POSTGRES_URL = process.env.POSTGRES_URL;
 const GITCOIN_DOCS_INDEX = process.env.GITCOIN_DOCS_INDEX || 'gitcoin_docs';
-const GITCOIN_SOURCE_INDEX = process.env.GITCOIN_SOURCE_INDEX || 'gitcoin_source';
+const GITCOIN_SOURCE_INDEX = process.env.GITCOIN_SOURCE_INDEX || 'gitcoin_source_code';
 const SUCCESSFUL_QUERIES_INDEX = process.env.SUCCESSFUL_QUERIES_INDEX || 'successful_gql_queries';
 const API_TOKEN = process.env.API_TOKEN || '';
 
