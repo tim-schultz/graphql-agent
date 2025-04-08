@@ -19,6 +19,7 @@
     "@mastra/memory": "^0.2.6",
     "@mastra/pg": "^0.2.6",
     "@mastra/rag": "^0.1.14",
+    "@openrouter/ai-sdk-provider": "^0.4.5",
     "ai": "^4.3.2",
     "axios": "^1.8.4",
     "cheerio": "^1.0.0",
