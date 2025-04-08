@@ -19,3 +19,5 @@ export const weatherAgent = new Agent({
   model: google('gemini-1.5-pro-latest'),
   tools: { graphqlQuery, dynamicGitcoinDocs, dynamicGitcoinSourceCode, graphqlIntrospection },
 });
+
+export { gqlAgent } from './graphql-agent';
