@@ -1,10 +1,15 @@
-import { google } from '@ai-sdk/google';
-import { Agent } from '@mastra/core/agent';
-import { graphqlQuery, dynamicGitcoinDocs, dynamicGitcoinSourceCode, graphqlIntrospection } from '../tools';
+import { google } from "@ai-sdk/google";
+import { Agent } from "@mastra/core/agent";
+import {
+	dynamicGitcoinDocs,
+	dynamicGitcoinSourceCode,
+	graphqlIntrospection,
+	graphqlQuery,
+} from "../tools";
 
 export const weatherAgent = new Agent({
-  name: 'Weather Agent',
-  instructions: `
+	name: "Weather Agent",
+	instructions: `
       You are a helpful weather assistant that provides accurate weather information.
 
       Your primary function is to help users get weather details for specific locations. When responding:
@@ -16,8 +21,13 @@ export const weatherAgent = new Agent({
 
       Use the weatherTool to fetch current weather data.
 `,
-  model: google('gemini-1.5-pro-latest'),
-  tools: { graphqlQuery, dynamicGitcoinDocs, dynamicGitcoinSourceCode, graphqlIntrospection },
+	model: google("gemini-1.5-pro-latest"),
+	tools: {
+		graphqlQuery,
+		dynamicGitcoinDocs,
+		dynamicGitcoinSourceCode,
+		graphqlIntrospection,
+	},
 });
 
-export { gqlAgent } from './graphql-agent';
+export { gqlAgent } from "./graphql-agent";

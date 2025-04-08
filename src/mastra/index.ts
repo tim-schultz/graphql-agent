@@ -1,14 +1,13 @@
-
-import { Mastra } from '@mastra/core/mastra';
-import { createLogger } from '@mastra/core/logger';
+import { createLogger } from "@mastra/core/logger";
+import { Mastra } from "@mastra/core/mastra";
 // Import both workflow and agent from the workflows file
-import { gitcoinQueryWorkflow, gitcoinAgent } from './workflows'; 
+import { gitcoinAgent, gitcoinQueryWorkflow } from "./workflows";
 
 export const mastra = new Mastra({
-  workflows: { gitcoinQueryWorkflow }, 
-  agents: { gitcoinAgent }, 
-  logger: createLogger({
-    name: 'Mastra',
-    level: 'info',
-  }),
+	workflows: { gitcoinQueryWorkflow },
+	agents: { gitcoinAgent },
+	logger: createLogger({
+		name: "Mastra",
+		level: "info",
+	}),
 });

@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "mastra dev",
-    "download-gitbook": "tsx src/embed/gitbook.ts"
+    "download-gitbook": "tsx src/embed/gitbook.ts",
+    "lint:fix": "biome lint --write --unsafe"
   },
   "keywords": [],
   "author": "",

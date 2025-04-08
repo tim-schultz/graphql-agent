@@ -1,47 +1,48 @@
+import { createVectorQueryTool } from "./get-vector-context";
+import { createGraphQLIntrospectionTool } from "./introspect-graphql";
 // Import tool creators
-import { createGraphQLQueryTool } from './query-graphql';
-import { createGraphQLIntrospectionTool } from './introspect-graphql';
-import { createVectorQueryTool } from './get-vector-context';
-
+import { createGraphQLQueryTool } from "./query-graphql";
 
 // Environment variables
-const GITCOIN_INDEXER_API_URL = process.env.GITCOIN_INDEXER_API_URL || 'https://beta.indexer.gitcoin.co/v1/graphql';
+const GITCOIN_INDEXER_API_URL =
+	process.env.GITCOIN_INDEXER_API_URL ||
+	"https://beta.indexer.gitcoin.co/v1/graphql";
 const POSTGRES_URL = process.env.POSTGRES_URL;
-const GITCOIN_DOCS_INDEX = process.env.GITCOIN_DOCS_INDEX || 'gitcoin_docs';
-const GITCOIN_SOURCE_INDEX = process.env.GITCOIN_SOURCE_INDEX || 'gitcoin_source_code';
-const SUCCESSFUL_QUERIES_INDEX = process.env.SUCCESSFUL_QUERIES_INDEX || 'successful_gql_queries';
-const API_TOKEN = process.env.API_TOKEN || '';
+const GITCOIN_DOCS_INDEX = process.env.GITCOIN_DOCS_INDEX || "gitcoin_docs";
+const GITCOIN_SOURCE_INDEX =
+	process.env.GITCOIN_SOURCE_INDEX || "gitcoin_source_code";
+const SUCCESSFUL_QUERIES_INDEX =
+	process.env.SUCCESSFUL_QUERIES_INDEX || "successful_gql_queries";
+const API_TOKEN = process.env.API_TOKEN || "";
 
 /**
  * Create and export GraphQL query tool instance
  */
-export const graphqlQuery = createGraphQLQueryTool(
-  GITCOIN_INDEXER_API_URL,
-  {
-    allowMutations: false,
-    defaultHeaders: {
-      "Authorization": API_TOKEN ? `Bearer ${API_TOKEN}` : ''
-    },
-    successfulQueriesIndexName: SUCCESSFUL_QUERIES_INDEX,
-    pgConnectionString: POSTGRES_URL
-  }
-);
+export const graphqlQuery = createGraphQLQueryTool(GITCOIN_INDEXER_API_URL, {
+	allowMutations: false,
+	defaultHeaders: {
+		Authorization: API_TOKEN ? `Bearer ${API_TOKEN}` : "",
+	},
+	successfulQueriesIndexName: SUCCESSFUL_QUERIES_INDEX,
+	pgConnectionString: POSTGRES_URL,
+});
 
 /**
  * Create and export GraphQL introspection tool instance
  */
 export const graphqlIntrospection = createGraphQLIntrospectionTool(
-  GITCOIN_INDEXER_API_URL,
-  {
-    defaultHeaders: {
-      "Authorization": API_TOKEN ? `Bearer ${API_TOKEN}` : ''
-    }
-  }
+	GITCOIN_INDEXER_API_URL,
+	{
+		defaultHeaders: {
+			Authorization: API_TOKEN ? `Bearer ${API_TOKEN}` : "",
+		},
+	},
 );
 
-
 if (!POSTGRES_URL) {
-  throw new Error('POSTGRES_URL is not set. Please set it to use vector query tools.');
+	throw new Error(
+		"POSTGRES_URL is not set. Please set it to use vector query tools.",
+	);
 }
 
 /**
@@ -49,29 +50,28 @@ if (!POSTGRES_URL) {
  */
 
 const dynamicGitcoinDocs = createVectorQueryTool(
-  POSTGRES_URL,
-  GITCOIN_DOCS_INDEX,
-  {
-    description: 'Retrieve relevant information about the Gitcoin Grants ecosystem, how the protocol works, and how to get involved from a grantee, community member, or just an interested party',
-    topK: 5,
-    threshold: 0.6
-  }
-)
-
-const dynamicGitcoinSourceCode = createVectorQueryTool(
-  POSTGRES_URL,
-  GITCOIN_SOURCE_INDEX,
-  {
-    description: 'Retrieve relevant source code that makes up the mechanisms behind Gitcoin Grants Rounds. Useful to understand how the protocol works and how to contribute to it',
-    topK: 3,
-    threshold: 0.7
-  }
+	POSTGRES_URL,
+	GITCOIN_DOCS_INDEX,
+	{
+		description:
+			"Retrieve relevant information about the Gitcoin Grants ecosystem, how the protocol works, and how to get involved from a grantee, community member, or just an interested party",
+		topK: 5,
+		threshold: 0.6,
+	},
 );
 
-export {
-  dynamicGitcoinDocs,
-  dynamicGitcoinSourceCode
-};
+const dynamicGitcoinSourceCode = createVectorQueryTool(
+	POSTGRES_URL,
+	GITCOIN_SOURCE_INDEX,
+	{
+		description:
+			"Retrieve relevant source code that makes up the mechanisms behind Gitcoin Grants Rounds. Useful to understand how the protocol works and how to contribute to it",
+		topK: 3,
+		threshold: 0.7,
+	},
+);
+
+export { dynamicGitcoinDocs, dynamicGitcoinSourceCode };
 
 /**
  * Export all tool creators for custom usage
