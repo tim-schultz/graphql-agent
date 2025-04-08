@@ -11,8 +11,6 @@ import {
   dynamicGitcoinSourceCode 
 } from '../tools';
 
-// Constants
-const GITCOIN_INDEXER_API_URL = process.env.GITCOIN_INDEXER_API_URL || 'https://beta.indexer.gitcoin.co/v1/graphql';
 
 // Use the specified model
 const o3Mini = openai('o3-mini-2025-01-31');
@@ -47,10 +45,10 @@ const fetchSchema = new Step({
   inputSchema: z.object({
     userQuestion: z.string(),
   }),
-  outputSchema: z.object({
-    schema: z.string(),
-    userQuestion: z.string(),
-  }),
+  // outputSchema: z.object({
+  //   schema: z.string(),
+  //   userQuestion: z.string(),
+  // }),
   execute: async ({ context }) => {
     // Get the user question from the trigger
     const userQuestion = context?.getStepResult<{ userQuestion: string }>("trigger")?.userQuestion 
@@ -63,7 +61,7 @@ const fetchSchema = new Step({
     
     if (!result.success || !result.fullSchema) { // Added check for fullSchema existence
       throw new Error(`Failed to fetch GraphQL schema: ${result.message || 'Schema was empty'}`);
-    }
+    } 
     
     return {
       schema: result.fullSchema, // Now guaranteed to be a string
@@ -98,15 +96,14 @@ const searchContext = new Step({
     // Wrap query in context object
     const docsResult = await dynamicGitcoinDocs!.execute!({ 
       context: { query: userQuestion } 
-    }) as { context?: string }; 
+    }); 
     
     // Search for relevant source code
     console.log("Searching Gitcoin source code for context");
     // Wrap query in context object
     const sourceResult = await dynamicGitcoinSourceCode!.execute!({
       context: { query: userQuestion }
-    }) as { context?: string };
-    
+    }) ;
     return {
       docsContext: docsResult.context || "No relevant documentation found.",
       sourceCodeContext: sourceResult.context || "No relevant source code found.",
@@ -208,7 +205,7 @@ const planQuery = new Step({
     const res = await gitcoinAgent.generate(prompt, {
       output: z.object({
         queryText: z.string(),
-        queryVariables: z.string().optional(),
+        queryVariables: z.string(),
       }),
     });
     
@@ -402,7 +399,7 @@ const analyzeResult = new Step({
         ${queryVariables || '{}'}
         
         ERROR MESSAGE:
-        ${JSON.stringify(errors, null, 2) || message || "Unknown error"}
+        ${JSON.stringify(errors, null, 2)|| "Unknown error"}
         
         DOCUMENTATION CONTEXT:
         ${docsContext}
