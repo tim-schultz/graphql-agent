@@ -75,6 +75,14 @@ function processGraphQLResponse(
   };
 }
 
+const outputSchema = z.object({
+  success: z.boolean(),
+  data: z.any().optional(),
+  errors: z.array(z.any()).nullable().optional(),
+  message: z.string().optional()
+});
+
+
 /**
  * Creates a GraphQL query tool for Mastra
  * 
@@ -111,6 +119,7 @@ export const createGraphQLQueryTool = (
       maxTokens: z.number().optional().describe('Maximum token count before truncation')
     }),
     description: 'Execute a GraphQL query against an endpoint',
+    outputSchema,
     execute: async ({ context }) => {
       console.log('[GraphQL Query Tool] Execution started.');
       

@@ -208,6 +208,13 @@ interface GraphQLIntrospectionToolOptions {
   modelName?: string;
 }
 
+const outputSchema = z.object({
+  success: z.boolean(),
+  fullSchema: z.string().optional(),
+  schema: z.string().nullable().optional(),
+  message: z.string()
+});
+
 /**
  * Creates a GraphQL introspection tool for Mastra
  * 
@@ -224,10 +231,11 @@ export const createGraphQLIntrospectionTool = (
     modelName = 'gpt-4o-mini'
   } = options;
   
-  return createTool({
+  const tool = createTool({
     id: "GraphQL Introspection",
     inputSchema: z.object({}),
     description: 'Introspect a GraphQL schema from an endpoint',
+    outputSchema,
     execute: async ({ context }) => {
       try {
         console.log('[GraphQL Introspection] Introspecting GraphQL schema...');
@@ -268,4 +276,8 @@ export const createGraphQLIntrospectionTool = (
       }
     }
   });
+  if (!tool) {
+    throw new Error('Failed to create GraphQL introspection tool');
+  }
+  return tool;
 };
