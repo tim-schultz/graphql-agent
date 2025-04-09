@@ -1,2 +1,5 @@
+import { graphqlExecution } from "./graphql-execution";
 // Export for use in other files
-export { gitcoinQueryWorkflow, gitcoinAgent } from "./smart-contract-analysis";
+// import { gitcoinQueryWorkflow } from "./smart-contract-analysis";
+// gitcoinQueryWorkflow
+export { graphqlExecution };

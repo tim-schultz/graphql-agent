@@ -1,0 +1,28 @@
+# GitHub Files Configuration
+# This file lists the GitHub files to be processed and embedded
+
+# PostgreSQL connection settings
+[postgresql]
+indexName = "gitcoin_code_embeddings"
+
+# GitHub files to process
+[github]
+files = [
+  # Allo Protocol interfaces and implementations
+  # "https://github.com/allo-protocol/allo-v2/blob/main/contracts/core/interfaces/IAllo.sol",
+  # "https://github.com/allo-protocol/allo-v2/blob/main/contracts/core/interfaces/IRegistry.sol",
+  # "https://github.com/allo-protocol/allo-v2/blob/main/contracts/core/interfaces/IStrategy.sol",
+  "https://github.com/allo-protocol/allo-v2/blob/main/contracts/strategies/donation-voting-merkle-base/DonationVotingMerkleDistributionBaseStrategy.sol",
+
+  # Add more files as needed
+  # "https://raw.githubusercontent.com/owner/repo/branch/path/to/file.ext",
+]
+
+# Embedding configuration
+[embedding]
+# Whether to try to split code by function/method boundaries
+chunkByFunctions = true
+
+# Maximum lines per chunk when using line-based splitting
+# (used as fallback when function splitting doesn't work)
+chunkMaxLines = 80

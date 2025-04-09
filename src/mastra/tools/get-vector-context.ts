@@ -4,6 +4,34 @@ import { PgVector } from "@mastra/pg";
 import { embed } from "ai";
 import { z } from "zod";
 
+export const vectorResponse = z.object({
+	context: z
+		.string()
+		.describe(
+			"The context retrieved from the vector database. This will contain the most relevant information based on the query.",
+		),
+	query: z
+		.string()
+		.describe(
+			"The original query that was used to fetch the context. This is useful for reference and debugging.",
+		),
+	results: z.array(
+		z.object({
+			text: z
+				.string()
+				.describe(
+					"The text of the document that was retrieved from the vector database.",
+				),
+			similarity: z
+				.number()
+				.describe(
+					"The similarity score of the retrieved document with respect to the query. This indicates how relevant the document is to the query.",
+				),
+			metadata: z.object({}),
+		}),
+	),
+});
+
 /**
  * Fetches contextually similar embeddings from the Mastra vector database.
  *
@@ -24,7 +52,7 @@ export const createVectorQueryTool = (
 	} = {},
 ) => {
 	// Set default values for options
-	const topK = options.topK || 5;
+	const topK = options.topK || 2;
 	const threshold = options.threshold || 0.5;
 	const embeddingModel = options.embeddingModel || "text-embedding-3-small";
 	const description =
@@ -43,34 +71,9 @@ export const createVectorQueryTool = (
 					"The user query or topic to find relevant context for. This should be a concise summary or question.",
 				),
 		}),
-		outputSchema: z.object({
-			context: z
-				.string()
-				.describe(
-					"The context retrieved from the vector database. This will contain the most relevant information based on the query.",
-				),
-			query: z
-				.string()
-				.describe(
-					"The original query that was used to fetch the context. This is useful for reference and debugging.",
-				),
-			results: z.array(
-				z.object({
-					text: z
-						.string()
-						.describe(
-							"The text of the document that was retrieved from the vector database.",
-						),
-					similarity: z
-						.number()
-						.describe(
-							"The similarity score of the retrieved document with respect to the query. This indicates how relevant the document is to the query.",
-						),
-					metadata: z.object({}),
-				}),
-			),
-		}),
+		outputSchema: vectorResponse,
 		description,
+
 		execute: async ({ context: { query } }) => {
 			try {
 				console.log(`Executing Vector Query with: "${query}"`);
@@ -83,17 +86,10 @@ export const createVectorQueryTool = (
 
 				// Query the vector store
 				const results = await pgVector.query({
+					minScore: threshold,
 					indexName: indexName,
 					queryVector: embedding,
-					topK: topK,
-					// // Optional filter by similarity threshold
-					// filter: threshold > 0 ? {
-					//   $custom: {
-					//     operator: ">",
-					//     value: threshold,
-					//     field: "score" // This assumes the similarity score field is named 'score'
-					//   }
-					// } : undefined
+					topK,
 				});
 
 				if (!results || results.length === 0) {

@@ -169,18 +169,9 @@ export const createGraphQLQueryTool = (
 					);
 				}
 
-				console.log(
-					"[GraphQL Query Tool] Executing query against endpoint:",
-					endpoint,
-				);
-
 				// Execute the query
 				const useHeaders = parseAndMergeHeaders(defaultHeaders, {});
 
-				console.log({
-					query,
-					variables: variables ? JSON.parse(variables) : undefined,
-				});
 
 				const response = await fetch(endpoint, {
 					method: "POST",

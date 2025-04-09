@@ -9,6 +9,8 @@ const GITCOIN_INDEXER_API_URL =
 	"https://beta.indexer.gitcoin.co/v1/graphql";
 const POSTGRES_URL = process.env.POSTGRES_URL;
 const GITCOIN_DOCS_INDEX = process.env.GITCOIN_DOCS_INDEX || "gitcoin_docs";
+const GITCOIN_ALLO_SOURCE_CODE =
+	process.env.GITCOIN_DOCS_INDEX || "gitcoin_code_embeddings";
 const GITCOIN_SOURCE_INDEX =
 	process.env.GITCOIN_SOURCE_INDEX || "gitcoin_source_code";
 const SUCCESSFUL_QUERIES_INDEX =
@@ -55,8 +57,19 @@ const dynamicGitcoinDocs = createVectorQueryTool(
 	{
 		description:
 			"Retrieve relevant information about the Gitcoin Grants ecosystem, how the protocol works, and how to get involved from a grantee, community member, or just an interested party",
-		topK: 5,
-		threshold: 0.6,
+		topK: 1,
+		threshold: 0.3,
+	},
+);
+
+const alloGithubSmartContract = createVectorQueryTool(
+	POSTGRES_URL,
+	GITCOIN_ALLO_SOURCE_CODE,
+	{
+		description:
+			"Retrieve relevant source code that makes up the mechanisms behind Gitcoin Grants Rounds. Useful to understand how the protocol works and how to run queries to access relevant transaction data",
+		topK: 1,
+		threshold: 0.3,
 	},
 );
 
@@ -66,12 +79,16 @@ const dynamicGitcoinSourceCode = createVectorQueryTool(
 	{
 		description:
 			"Retrieve relevant source code that makes up the mechanisms behind Gitcoin Grants Rounds. Useful to understand how the protocol works and how to contribute to it",
-		topK: 3,
-		threshold: 0.7,
+		topK: 1,
+		threshold: 0.3,
 	},
 );
 
-export { dynamicGitcoinDocs, dynamicGitcoinSourceCode };
+export {
+	dynamicGitcoinDocs,
+	dynamicGitcoinSourceCode,
+	alloGithubSmartContract,
+};
 
 /**
  * Export all tool creators for custom usage
