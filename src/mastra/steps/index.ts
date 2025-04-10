@@ -102,16 +102,15 @@ export const sourceCode = new Step({
 	},
 });
 
-// Define the steps for the nested execution workflow
+export const generateInputSchema = z.object({
+	prompt: z.string(),
+	schema: z.string(),
+	relevantSourceCode: z.string(),
+});
 
-// Step to generate a GraphQL query based on the prompt
 export const generateQuery = new Step({
 	id: "generateQuery",
-	inputSchema: z.object({
-		prompt: z.string(),
-		schema: z.string(),
-		relevantSourceCode: z.string(),
-	}),
+	inputSchema: generateInputSchema,
 	outputSchema: queryResponseData,
 	execute: async ({ context }) => {
 		console.log("Executing generateQuery step...");
@@ -313,20 +312,22 @@ ${prompt}
 	},
 });
 
+export const fixQueryInputSchema = z.object({
+	prompt: z.string(),
+	schema: z.string(),
+	relevantSourceCode: z.string(),
+	failedQuery: z.object({
+		query: z.string(),
+		variables: z.string(),
+		explanation: z.string(),
+		error: z.union([z.array(z.unknown()), z.string()]),
+	}),
+});
+
 // Step to fix a failed query
 export const fixQuery = new Step({
 	id: "fixQuery",
-	inputSchema: z.object({
-		prompt: z.string(),
-		schema: z.string(),
-		relevantSourceCode: z.string(),
-		failedQuery: z.object({
-			query: z.string(),
-			variables: z.string(),
-			explanation: z.string(),
-			error: z.union([z.array(z.unknown()), z.string()]),
-		}),
-	}),
+	inputSchema: fixQueryInputSchema,
 	outputSchema: queryResponseData,
 	execute: async ({ context }) => {
 		const { prompt, schema, relevantSourceCode, failedQuery } =
