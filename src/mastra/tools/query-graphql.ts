@@ -45,7 +45,7 @@ function processGraphQLResponse(
 	result: {
 		success: boolean;
 		data?: unknown; // Changed from any
-		errors: unknown[] | null; // Changed from any[]
+		errors: z.infer<typeof GraphQLErrorsType>;
 		message: string;
 	},
 	options: {
@@ -79,10 +79,34 @@ function processGraphQLResponse(
 	};
 }
 
+const GraphQLErrorLocationType = z.object({
+	line: z.number(),
+	column: z.number(),
+});
+
+const GraphQLErrorExtensionsType = z
+	.object({
+		code: z.string(),
+		locations: z.array(GraphQLErrorLocationType),
+	})
+	.nullable()
+	.optional();
+
+const GraphQLErrorType = z.object({
+	message: z.string(),
+	extensions: GraphQLErrorExtensionsType,
+	path: z
+		.array(z.union([z.string(), z.number()]))
+		.nullable()
+		.optional(),
+});
+
+const GraphQLErrorsType = z.array(GraphQLErrorType).nullable();
+
 const outputSchema = z.object({
 	success: z.boolean(),
-	data: z.unknown().optional(), // Changed from any()
-	errors: z.array(z.unknown()).nullable().optional(), // Changed from any()
+	data: z.unknown().optional(),
+	errors: GraphQLErrorsType,
 	message: z.string().optional(),
 });
 
@@ -161,7 +185,10 @@ export const createGraphQLQueryTool = (
 							success: false,
 							data: null,
 							errors: [
-								"Mutations are not allowed unless enabled in configuration",
+								{
+									message:
+										"Mutations are not allowed unless enabled in configuration",
+								},
 							],
 							message: "Mutations are not allowed",
 						},
@@ -171,7 +198,6 @@ export const createGraphQLQueryTool = (
 
 				// Execute the query
 				const useHeaders = parseAndMergeHeaders(defaultHeaders, {});
-
 
 				const response = await fetch(endpoint, {
 					method: "POST",
@@ -269,7 +295,11 @@ export const createGraphQLQueryTool = (
 				return {
 					success: false,
 					data: null,
-					errors: [error instanceof Error ? error.message : String(error)],
+					errors: [
+						{
+							message: error instanceof Error ? error.message : String(error),
+						},
+					],
 					message: `Failed to execute GraphQL query: ${error instanceof Error ? error.message : String(error)}`,
 				};
 			}

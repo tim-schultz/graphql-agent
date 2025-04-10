@@ -1,6 +1,5 @@
 import { createVectorQueryTool } from "./get-vector-context";
 import { createGraphQLIntrospectionTool } from "./introspect-graphql";
-// Import tool creators
 import { createGraphQLQueryTool } from "./query-graphql";
 
 // Environment variables

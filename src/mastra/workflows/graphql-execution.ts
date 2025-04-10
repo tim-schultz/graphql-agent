@@ -2,9 +2,9 @@ import { Step, Workflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import { generateMermaidDiagram } from "../../scripts/diagram-gql-schema";
 import {
-	gqlIntrospectAgent,
-	gqlExecutionAgent,
 	analysisAgent,
+	gqlExecutionAgent,
+	gqlIntrospectAgent,
 } from "../agents";
 import {
 	alloGithubSmartContract,
@@ -12,16 +12,8 @@ import {
 	graphqlQuery,
 } from "../tools";
 
-// Define the Status enum for consistent status values
 const StatusEnum = z.enum(["success", "failure"]);
 type Status = z.infer<typeof StatusEnum>;
-
-const graphqlExecution = new Workflow({
-	name: "graphql-workflow",
-	triggerSchema: z.object({
-		prompt: z.string(),
-	}),
-});
 
 const fetchSchema = new Step({
 	id: "fetchSchema",
@@ -29,11 +21,9 @@ const fetchSchema = new Step({
 		schema: z.string(),
 	}),
 	execute: async ({ context }) => {
-		// Use the introspection tool to fetch the schema
 		const result = await graphqlIntrospection?.execute?.({ context: {} });
 
 		if (!result?.success || !result.fullSchema) {
-			// Added check for fullSchema existence
 			throw new Error(
 				`Failed to fetch GraphQL schema: ${result?.message || "Schema was empty"}`,
 			);
@@ -44,41 +34,6 @@ const fetchSchema = new Step({
 		};
 	},
 });
-
-// const documentation = new Step({
-//  id: "documentation",
-//  outputSchema: z.object({
-//      prompt: z.string(), // Assuming trigger provides prompt
-//  }),
-//  outputSchema: z.object({
-// 		relevantDocumentation: z.string(),
-//  }),
-//  execute: async ({ context }) => {
-//      const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
-//      const prompt = triggerData?.prompt;
-//      if (!prompt) {
-//          throw new Error("Prompt not found from trigger step");
-//      }
-//      console.log({ prompt });
-
-// 		// Search for relevant documentation
-// 		console.log("Searching Gitcoin docs for context");
-// 		// Wrap query in context object
-// 		const relevantDocumentation = await dynamicGitcoinDocs?.execute?.({
-// 			context: { query: prompt },
-// 		});
-
-// 		if (!relevantDocumentation) {
-// 			return {
-// 				relevantDocumentation: "No relevant documentation found.",
-// 			};
-// 		}
-
-// 		return {
-// 			relevantDocumentation: relevantDocumentation.context,
-// 		};
-// 	},
-// });
 
 const sourceCode = new Step({
 	id: "sourceCode",
@@ -92,7 +47,6 @@ const sourceCode = new Step({
 			throw new Error("Prompt not found from trigger step in sourceCode");
 		}
 
-		// Wrap query in context object
 		const eventDocuments = await alloGithubSmartContract?.execute?.({
 			context: {
 				query: `Events with @param or @notice similar to: ${prompt}`,
@@ -132,12 +86,12 @@ const generateQuery = new Step({
 	id: "generateQuery",
 	outputSchema: z.object({
 		query: z.string(),
+		variables: z.string(),
 		explanation: z.string(),
 	}),
 	execute: async ({ context }) => {
 		console.log("Executing generateQuery step...");
 		try {
-			// Retrieve data from previous steps using context
 			const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
 			const schemaData = context?.getStepResult<{ schema: string }>(
 				"fetchSchema",
@@ -151,7 +105,6 @@ const generateQuery = new Step({
 			const relevantSourceCode = sourceCodeData?.relevantSourceCode;
 
 			if (!prompt || !schema || relevantSourceCode === undefined) {
-				// Check relevantSourceCode for undefined specifically, as it can be an empty string
 				throw new Error(
 					`Missing required data for generateQuery: prompt=${!!prompt}, schema=${!!schema}, relevantSourceCode=${relevantSourceCode !== undefined}`,
 				);
@@ -173,55 +126,62 @@ ${mermaid}
 ${relevantSourceCode || "No relevant source code comments found."}
 </relevant_source_code_comments>
 
-Below you will find an example query that is known to be valid. It is important to craft your query with a similar syntax
+Below you will find an example query that is known to be valid. It is important to craft your query with a similar syntax, including proper variable definitions:
+
 <successful_query>
 query getRoundForExplorer($roundId: String!, $chainId: Int!) {
-    rounds(
-      limit: 1
-      where: {
-        id: { _eq: $roundId }
-        chainId: { _eq: $chainId }
-        roundMetadata: { _isNull: false }
-      }
-    ) {
+  rounds(
+    limit: 1
+    where: {
+      id: { _eq: $roundId }
+      chainId: { _eq: $chainId }
+      roundMetadata: { _isNull: false }
+    }
+  ) {
+    id
+    chainId
+    uniqueDonorsCount
+    applicationsStartTime
+    applicationsEndTime
+    donationsStartTime
+    donationsEndTime
+    matchTokenAddress
+    roundMetadata
+    roundMetadataCid
+    applicationMetadata
+    applicationMetadataCid
+    strategyId
+    projectId
+    strategyAddress
+    strategyName
+    readyForPayoutTransaction
+    applications(where: { status: { _eq: APPROVED } }) {
       id
-      chainId
-      uniqueDonorsCount
-      applicationsStartTime
-      applicationsEndTime
-      donationsStartTime
-      donationsEndTime
-      matchTokenAddress
-      roundMetadata
-      roundMetadataCid
-      applicationMetadata
-      applicationMetadataCid
-      strategyId
       projectId
-      strategyAddress
-      strategyName
-      readyForPayoutTransaction
-      applications(where: { status: { _eq: APPROVED } }) {
+      status
+      metadata
+      anchorAddress
+      project {
         id
-        projectId
-        status
-        metadata
         anchorAddress
-        project {
-          id
-          anchorAddress
-        }
       }
     }
   }
+}
 </successful_query>
 
-Here is further context for the active GG23 rounds:
-	- All rounds are currently active on Arbitrum network which has a chainId of 42161.
-	- The dApps and Apps round has a roundId of 867
-	- The Web3 Infrastructure round has a roundId of 865
-	- The Developer Tooling and Libraries has a roundId of 863
+<successful_variables>
+{
+  "roundId": "865",
+  "chainId": 42161
+}
+</successful_variables>
 
+Here is further context for the active GG23 rounds:
+- All rounds are currently active on Arbitrum network which has a chainId of 42161.
+- The dApps and Apps round has a roundId of 867
+- The Web3 Infrastructure round has a roundId of 865
+- The Developer Tooling and Libraries has a roundId of 863
 
 Now, follow these steps to generate an appropriate GraphQL query:
 
@@ -231,16 +191,22 @@ Now, follow these steps to generate an appropriate GraphQL query:
 
 3. Construct a GraphQL query that includes the necessary fields to answer the user's question. Make sure to:
    - Use the appropriate root query type (usually "query" or "Query")
+   - Define all required variables with their types in the query
    - Include any required arguments for fields
    - Nest fields for related types as needed
    - Only include fields that are relevant to answering the question
 
-4. If the schema doesn't contain the necessary fields to fully answer the question, create a query with the most relevant available information.
+4. Generate appropriate variables in JSON format that match the variable definitions in your query.
 
-5. Provide your response in the following format:
+5. If the schema doesn't contain the necessary fields to fully answer the question, create a query with the most relevant available information.
+
+6. Provide your response in the following format:
    <query>
-   Your generated GraphQL query here
+   Your generated GraphQL query here with variable definitions
    </query>
+   <variables>
+   Your JSON variables here
+   </variables>
    <explanation>
    A brief explanation of how this query relates to the user's question and how it can be used to obtain the desired information
    </explanation>
@@ -248,18 +214,35 @@ Now, follow these steps to generate an appropriate GraphQL query:
 Here's an example of how your output should be formatted:
 
 <example>
-User question: "What are the titles of the top 5 rated movies?"
+User question: "What are the details for the Web3 Infrastructure round?"
 
 <query>
-query {
-  movies(orderBy: RATING_DESC, first: 5) {
-    title
-    rating
+query getRoundDetails($roundId: String!, $chainId: Int!) {
+  rounds(
+    limit: 1
+    where: {
+      id: { _eq: $roundId }
+      chainId: { _eq: $chainId }
+    }
+  ) {
+    id
+    chainId
+    roundMetadata
+    applicationsStartTime
+    applicationsEndTime
+    donationsStartTime
+    donationsEndTime
   }
 }
 </query>
+<variables>
+{
+  "roundId": "865",
+  "chainId": 42161
+}
+</variables>
 <explanation>
-This query fetches the top 5 movies ordered by their rating in descending order. It returns the title and rating of each movie, which directly answers the user's question about the titles of the top-rated movies.
+This query fetches details about the Web3 Infrastructure round (ID: 865) on the Arbitrum network (chainID: 42161). It includes key fields like application periods, donation periods, and metadata that will provide information about the round.
 </explanation>
 </example>
 
@@ -268,34 +251,38 @@ Now, please generate a GraphQL query to answer the following question:
 <question>
 ${prompt}
 </question>
-		`;
+			`;
 
 			const res = await gqlIntrospectAgent.generate(queryPrompt);
 
 			if (!res || !res.text) {
 				return {
-					query: "query { example }", // Placeholder - Extract from res.text
-					explanation: "", // Placeholder
+					query: "query { example }",
+					variables: "{}",
+					explanation: "",
 				};
 			}
 
 			const result = {
 				query: "",
+				variables: "{}",
 				explanation: "",
 			};
 
-			// Define regex patterns to extract content between tags
 			const queryPattern = /<query>([\s\S]*?)<\/query>/;
+			const variablesPattern = /<variables>([\s\S]*?)<\/variables>/;
 			const explanationPattern = /<explanation>([\s\S]*?)<\/explanation>/;
 
-			// Extract query
 			const queryMatch = res.text.match(queryPattern);
-			// biome-ignore lint/complexity/useOptionalChain: <explanation>
-			if (queryMatch && queryMatch[1]) {
+			if (queryMatch?.[1]) {
 				result.query = queryMatch[1].trim();
 			}
 
-			// Extract explanation
+			const variablesMatch = res.text.match(variablesPattern);
+			if (variablesMatch?.[1]) {
+				result.variables = variablesMatch[1].trim();
+			}
+
 			const explanationMatch = res.text.match(explanationPattern);
 			if (explanationMatch?.[1]) {
 				result.explanation = explanationMatch[1].trim();
@@ -309,19 +296,16 @@ ${prompt}
 	},
 });
 
-// Define the success response schema with StatusEnum
 const successResponseSchema = z.object({
 	status: StatusEnum,
 	result: z.string(),
 });
 
-// Define the error response schema with StatusEnum
 const errorResponseSchema = z.object({
 	status: StatusEnum,
 	error: z.union([z.array(z.unknown()), z.string()]),
 });
 
-// Combine into a union type for the full result
 const resultSchema = z.union([successResponseSchema, errorResponseSchema]);
 
 const executeQuery = new Step({
@@ -332,24 +316,33 @@ const executeQuery = new Step({
 			if (!context) {
 				throw new Error("Context is not available in executeQuery step");
 			}
-			// Retrieve data from previous steps using context
-			const { query, explanation } = context.getStepResult<{
+
+			const { query, variables, explanation } = context.getStepResult<{
 				query: string;
+				variables: string;
 				explanation: string;
 			}>("generateQuery");
-			const correctedQuery = context.getStepResult<{
-				correctedQuery?: string;
-			}>("fixQuery")?.correctedQuery;
 
-			if (correctedQuery) {
-				console.log("Using corrected query:", correctedQuery);
+			const correctedData = context.getStepResult<{
+				correctedQuery?: string;
+				correctedVariables?: string;
+			}>("fixQuery");
+
+			const queryToUse = correctedData?.correctedQuery || query;
+			const variablesToUse = correctedData?.correctedVariables || variables;
+
+			if (correctedData?.correctedQuery) {
+				console.log("Using corrected query:", queryToUse);
+				console.log("Using corrected variables:", variablesToUse);
 			} else {
 				console.log("Using original query:", query);
+				console.log("Using original variables:", variables);
 			}
 
 			const result = await graphqlQuery?.execute?.({
 				context: {
-					query: correctedQuery || query,
+					query: queryToUse,
+					variables: variablesToUse,
 				},
 			});
 
@@ -359,9 +352,13 @@ const executeQuery = new Step({
 					result: JSON.stringify(result.data),
 				};
 			}
+
+			const errorMessage = result?.errors
+				? result?.errors.map((error) => error.message).join(", ")
+				: "No errors found";
 			return {
 				status: "failure" as const,
-				error: result?.errors || "Query execution failed",
+				error: errorMessage,
 			};
 		} catch (error) {
 			return {
@@ -376,10 +373,10 @@ const fixQuery = new Step({
 	id: "fixQuery",
 	outputSchema: z.object({
 		correctedQuery: z.string(),
+		correctedVariables: z.string(),
 	}),
 	execute: async ({ context }) => {
 		try {
-			// Retrieve data from previous steps
 			const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
 			const schemaData = context?.getStepResult<{ schema: string }>(
 				"fetchSchema",
@@ -389,6 +386,7 @@ const fixQuery = new Step({
 			}>("sourceCode");
 			const queryData = context?.getStepResult<{
 				query: string;
+				variables: string;
 				explanation: string;
 			}>("generateQuery");
 			const executeData = context?.getStepResult<{
@@ -401,6 +399,7 @@ const fixQuery = new Step({
 			const schema = schemaData?.schema;
 			const relevantSourceCode = sourceCodeData?.relevantSourceCode;
 			const originalQuery = queryData?.query;
+			const originalVariables = queryData?.variables;
 			const originalExplanation = queryData?.explanation;
 			const error = executeData?.error;
 
@@ -410,30 +409,21 @@ const fixQuery = new Step({
 				!prompt ||
 				!schema ||
 				!originalQuery ||
+				!originalVariables ||
 				relevantSourceCode === undefined ||
 				!error
 			) {
 				throw new Error(
-					`Missing required data for fixQuery: prompt=${!!prompt}, schema=${!!schema}, relevantSourceCode=${relevantSourceCode !== undefined}, originalQuery=${!!originalQuery}, error=${!!error}`,
+					`Missing required data for fixQuery: prompt=${!!prompt}, schema=${!!schema}, relevantSourceCode=${relevantSourceCode !== undefined}, originalQuery=${!!originalQuery}, originalVariables=${!!originalVariables}, error=${!!error}`,
 				);
 			}
 
 			const parsedSchema = JSON.parse(schema);
 			const mermaid = generateMermaidDiagram(parsedSchema);
-
-			// Create a prompt to fix the failed query
 			const fixQueryPrompt = `
-You are an AI assistant tasked with fixing a GraphQL query that failed to execute. Your goal is to correct the query so it can successfully run against the GraphQL server.
+			You are an AI assistant specialized in fixing GraphQL queries that have failed to execute. Your task is to analyze the error, review the schema, and provide a corrected version of the query and variables that will successfully run against the GraphQL server.
 
-First, I will provide you with the context including the GraphQL schema, the original user question, the failed query, and the error message:
-
-<graphql_schema>
-${mermaid}
-</graphql_schema>
-
-<relevant_source_code_comments>
-${relevantSourceCode || "No relevant source code comments found."}
-</relevant_source_code_comments>
+First, let's review the context and necessary information:
 
 <original_question>
 ${prompt}
@@ -443,6 +433,10 @@ ${prompt}
 ${originalQuery}
 </failed_query>
 
+<failed_variables>
+${originalVariables}
+</failed_variables>
+
 <query_explanation>
 ${originalExplanation}
 </query_explanation>
@@ -451,112 +445,146 @@ ${originalExplanation}
 ${typeof error === "string" ? error : JSON.stringify(error)}
 </error_message>
 
-Below you will find an example query that is known to be valid. It is important to craft your fixed query with a similar syntax:
+Here's an example of a successful query for reference:
+
 <successful_query>
 query getRoundForExplorer($roundId: String!, $chainId: Int!) {
-	rounds(
-		limit: 1
-		where: {
-		id: { _eq: $roundId }
-		chainId: { _eq: $chainId }
-		roundMetadata: { _isNull: false }
-		}
-	) {
-		id
-		chainId
-		uniqueDonorsCount
-		applicationsStartTime
-		applicationsEndTime
-		donationsStartTime
-		donationsEndTime
-		matchTokenAddress
-		roundMetadata
-		roundMetadataCid
-		applicationMetadata
-		applicationMetadataCid
-		strategyId
-		projectId
-		strategyAddress
-		strategyName
-		readyForPayoutTransaction
-		applications(where: { status: { _eq: APPROVED } }) {
-		id
-		projectId
-		status
-		metadata
-		anchorAddress
-		project {
-			id
-			anchorAddress
-		}
-		}
-	}
-	}
+  rounds(
+    limit: 1
+    where: {
+      id: { _eq: $roundId }
+      chainId: { _eq: $chainId }
+      roundMetadata: { _isNull: false }
+    }
+  ) {
+    id
+    chainId
+    uniqueDonorsCount
+    applicationsStartTime
+    applicationsEndTime
+    donationsStartTime
+    donationsEndTime
+    matchTokenAddress
+    roundMetadata
+    roundMetadataCid
+    applicationMetadata
+    applicationMetadataCid
+    strategyId
+    projectId
+    strategyAddress
+    strategyName
+    readyForPayoutTransaction
+    applications(where: { status: { _eq: APPROVED } }) {
+      id
+      projectId
+      status
+      metadata
+      anchorAddress
+      project {
+        id
+        anchorAddress
+      }
+    }
+  }
+}
 </successful_query>
 
-Here is further context for the active GG23 rounds:
-	- All rounds are currently active on Arbitrum network which has a chainId of 42161.
-	- The dApps and Apps round has a roundId of 867
-	- The Web3 Infrastructure round has a roundId of 865
-	- The Developer Tooling and Libraries has a roundId of 863
+<successful_variables>
+{
+  "roundId": "865",
+  "chainId": 42161
+}
+</successful_variables>
 
-Now, please analyze the error and fix the query. Common issues include:
-1. Using field names that don't exist in the schema
-2. Missing required arguments
-3. Incorrect syntax for arguments or filters
-4. Including nested fields that don't exist on the parent type
-5. Issues with variable definitions and usage
+Additional context for active GG23 rounds:
+- All rounds are currently active on Arbitrum network (chainId: 42161)
+- dApps and Apps round (roundId: 867)
+- Web3 Infrastructure round (roundId: 865)
+- Developer Tooling and Libraries round (roundId: 863)
 
-Provide your corrected query in the following format:
+<graphql_schema>
+${mermaid}
+</graphql_schema>
+
+<relevant_source_code_comments>
+${relevantSourceCode || "No relevant source code comments found."}
+</relevant_source_code_comments>
+
+Now, please follow these steps to analyze and fix the query:
+
+1. Analyze the error message, GraphQL schema, and failed query.
+2. Identify potential issues, such as:
+   - Non-existent field names
+   - Missing or incorrect arguments
+   - Syntax errors in arguments or filters
+   - Invalid nested fields
+   - Problems with variable definitions or usage
+   - Mismatches between query variables and provided JSON
+3. Compare the failed query with the successful query example.
+4. Brainstorm multiple potential fixes that would result in a different query from the original.
+5. Choose the most appropriate fix that addresses the error and improves the query.
+6. Implement the chosen fix in both the query and variables.
+7. Ensure the new query is different from the original query.
+8. Format your response as shown in the example below.
+
+Please wrap your output  as described below. Do not deviate from the format
+
+Only return output that matches the below structure:
+
+Example output structure:
 <query>
-Your corrected GraphQL query here
+query ExampleQuery($exampleVar: String!) {
+  exampleField(input: $exampleVar) {
+    subField1
+    subField2
+  }
+}
 </query>
-<explanation>
-A brief explanation of what was wrong with the original query and how you fixed it
-</explanation>
+<variables>
+{
+  "exampleVar": "exampleValue"
+}
+</variables>
+
+Now, please proceed with your analysis and correction of the failed GraphQL query.
+You are an AI assistant tasked with fixing a GraphQL query that failed to execute. Your goal is to correct the query and variables so they can successfully run against the GraphQL server.
 			`;
 
-			// Use the GQL agent to fix the query
 			const res = await gqlExecutionAgent.generate(fixQueryPrompt);
 
 			if (!res || !res.text) {
-				return {
-					correctedQuery: originalQuery, // Return original if no fix is available
-					explanation: "Failed to generate a fixed query.",
-					status: "failure" as const,
-					error: "No response from query fixing agent",
-				};
+				throw new Error("Failed to generate fixed query");
 			}
 
-			// Extract the corrected query and explanation
-			const result = {
-				correctedQuery: "",
-				explanation: "",
-				status: "failure" as const,
-				error: "Query fixing process incomplete",
-			};
-
-			// Define regex patterns to extract content between tags
 			const queryPattern = /<query>([\s\S]*?)<\/query>/;
-			const explanationPattern = /<explanation>([\s\S]*?)<\/explanation>/;
+			const variablesPattern = /<variables>([\s\S]*?)<\/variables>/;
 
-			// Extract query
 			const queryMatch = res.text.match(queryPattern);
-			if (queryMatch?.[1]) {
-				const correctedQuery = queryMatch[1].trim();
-				console.log({ correctedQuery });
+			const variablesMatch = res.text.match(variablesPattern);
+
+			if (!queryMatch && !variablesMatch) {
+				throw new Error("No fixed query or variables found");
+			}
+
+			if (queryMatch && variablesMatch) {
+				const correctedQuery = queryMatch?.[1]
+					? queryMatch[1].trim()
+					: originalQuery;
+				const correctedVariables = variablesMatch?.[1]
+					? variablesMatch[1].trim()
+					: originalVariables;
+
 				return {
 					correctedQuery,
+					correctedVariables,
 				};
 			}
-			throw new Error("Failed to extract corrected query from response");
+			throw new Error("Failed to extract fixed query and variables");
 		} catch (error) {
 			console.error("Error in fixQuery step:", error);
 			return {
 				correctedQuery: "",
-				explanation: `Failed to fix query: ${error instanceof Error ? error.message : String(error)}`,
-				status: "failure" as const,
-				error: error instanceof Error ? error.message : String(error),
+				correctedVariables: "{}",
 			};
 		}
 	},
@@ -570,17 +598,16 @@ const analyzeQuery = new Step({
 	}),
 	execute: async ({ context }) => {
 		try {
-			// Retrieve data from previous steps
 			const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
 			const queryData = context?.getStepResult<{
 				query: string;
+				variables: string;
 				explanation: string;
 			}>("generateQuery");
 
-			// Get the result - from either executeQuery or fixQuery depending on which was successful
 			let resultData: unknown;
 			let queryResult: unknown;
-			// Check if we have a successful result from executeQuery
+
 			const executeData = context?.getStepResult<{
 				status: Status;
 				result?: string;
@@ -589,7 +616,6 @@ const analyzeQuery = new Step({
 				resultData = executeData;
 				queryResult = JSON.parse(executeData.result);
 			} else {
-				// If not, check if we have a successful result from fixQuery
 				const fixData = context?.getStepResult<{
 					status: Status;
 					result?: string;
@@ -602,15 +628,15 @@ const analyzeQuery = new Step({
 
 			const prompt = triggerData?.prompt;
 			const query = queryData?.query;
+			const variables = queryData?.variables;
 			const explanation = queryData?.explanation;
 
-			if (!prompt || !query || !resultData || !queryResult) {
+			if (!prompt || !query || !variables || !resultData || !queryResult) {
 				throw new Error(
-					`Missing required data for analyzeQuery: prompt=${!!prompt}, query=${!!query}, resultData=${!!resultData}, queryResult=${!!queryResult}`,
+					`Missing required data for analyzeQuery: prompt=${!!prompt}, query=${!!query}, variables=${!!variables}, resultData=${!!resultData}, queryResult=${!!queryResult}`,
 				);
 			}
 
-			// Create a prompt for the agent to analyze the query result
 			const analysisPrompt = `
 You are an expert GraphQL analyst who can interpret query results and provide clear insights.
 You'll be given a user's original question, the GraphQL query that was executed, and the query results.
@@ -622,6 +648,11 @@ User's original question:
 The GraphQL query that was executed:
 \`\`\`graphql
 ${query}
+\`\`\`
+
+The variables used:
+\`\`\`json
+${variables}
 \`\`\`
 
 Query explanation:
@@ -647,7 +678,6 @@ how well these results answer the original question, where 0 means "not at all r
 "completely answers the question". Format this as "Relevance score: X/10".
 			`;
 
-			// Use the GQL agent to analyze the result
 			const res = await analysisAgent.generate(analysisPrompt);
 
 			if (!res || !res.text) {
@@ -657,12 +687,10 @@ how well these results answer the original question, where 0 means "not at all r
 				};
 			}
 
-			// Extract the relevance score if present, otherwise default to 5
 			let relevanceScore = 5;
 			const relevanceMatch = res.text.match(/Relevance score:\s*(\d+)\/10/i);
 			if (relevanceMatch?.[1]) {
 				relevanceScore = Number.parseInt(relevanceMatch[1], 10);
-				// Ensure score is within 0-10 range
 				relevanceScore = Math.min(10, Math.max(0, relevanceScore));
 			}
 
@@ -680,24 +708,14 @@ how well these results answer the original question, where 0 means "not at all r
 	},
 });
 
-const debugStep = new Step({
-	id: "debugStep",
-	execute: async ({ context }) => {
-		const executeData = context?.getStepResult("executeQuery");
-		console.log(
-			"DEBUG - executeQuery result:",
-			JSON.stringify(executeData, null, 2),
-		);
-
-		const fixData = context?.getStepResult("fixQuery");
-		console.log("DEBUG - fixQuery result:", JSON.stringify(fixData, null, 2));
-
-		return { debugCompleted: true };
-	},
+const graphqlExecution = new Workflow({
+	name: "graphql-workflow",
+	triggerSchema: z.object({
+		prompt: z.string(),
+	}),
 });
 
 graphqlExecution
-	// Initial steps
 	.step(fetchSchema)
 	.then(sourceCode)
 	.then(generateQuery)
