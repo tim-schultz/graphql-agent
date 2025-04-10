@@ -6,10 +6,10 @@ import {
 	gqlExecutionAgent,
 	gqlIntrospectAgent,
 } from "./agents";
-import { graphqlExecution } from "./workflows";
+import { graphqlExecution, graphqlWorkflow } from "./workflows";
 
 export const mastra = new Mastra({
-	workflows: { graphqlExecution },
+	workflows: { graphqlExecution, graphqlWorkflow },
 	agents: {
 		gitcoinAgent,
 		gqlIntrospectAgent,

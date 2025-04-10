@@ -11,7 +11,6 @@ import {
 	graphqlIntrospection,
 	graphqlQuery,
 } from "../tools";
-import { exec } from "child_process";
 
 const StatusEnum = z.enum(["success", "failure"]);
 type Status = z.infer<typeof StatusEnum>;
@@ -83,34 +82,43 @@ const sourceCode = new Step({
 	},
 });
 
+const queryResponse = z.object({
+	status: z.boolean(), // Changed from z.enum(["success", "failure"])
+	query: z.string(),
+	variables: z.string(),
+	explanation: z.string(),
+	response: z.string(),
+});
+
 const generateQuery = new Step({
 	id: "generateQuery",
-	outputSchema: z.object({
-		query: z.string(),
-		variables: z.string(),
-		explanation: z.string(),
-	}),
+	outputSchema: queryResponse,
 	execute: async ({ context }) => {
 		console.log("Executing generateQuery step...");
-		try {
-			const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
-			const schemaData = context?.getStepResult(fetchSchema);
-			const sourceCodeData = context?.getStepResult(sourceCode);
+		const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
+		const schemaData = context?.getStepResult(fetchSchema);
+		const sourceCodeData = context?.getStepResult(sourceCode);
 
-			const prompt = triggerData?.prompt;
-			const schema = schemaData?.schema;
-			const relevantSourceCode = sourceCodeData?.relevantSourceCode;
+		const prompt = triggerData?.prompt;
+		const schema = schemaData?.schema;
+		const relevantSourceCode = sourceCodeData?.relevantSourceCode;
 
-			if (!prompt || !schema || relevantSourceCode === undefined) {
-				throw new Error(
-					`Missing required data for generateQuery: prompt=${!!prompt}, schema=${!!schema}, relevantSourceCode=${relevantSourceCode !== undefined}`,
-				);
-			}
+		const result = {
+			query: "",
+			variables: "{}",
+			explanation: "",
+			response: "",
+			status: false, // Initial status is failure
+		};
 
-			const parsedSchema = JSON.parse(schema);
-			const mermaid = generateMermaidDiagram(parsedSchema);
+		if (!prompt || !schema || relevantSourceCode === undefined) {
+			return result;
+		}
 
-			const queryPrompt = `
+		const parsedSchema = JSON.parse(schema);
+		const mermaid = generateMermaidDiagram(parsedSchema);
+
+		const queryPrompt = `
 You are an AI assistant tasked with generating GraphQL queries based on user questions and a provided GraphQL schema. Your goal is to create a query that can be executed against a GraphQL server to answer the user's question.
 
 First, I will provide you with relevant context including the GraphQL schema represented as a mermaid diagram and potentially relevant source code comments:
@@ -250,46 +258,44 @@ ${prompt}
 </question>
 			`;
 
-			const res = await gqlIntrospectAgent.generate(queryPrompt);
+		const res = await gqlIntrospectAgent.generate(queryPrompt);
 
-			if (!res || !res.text) {
-				return {
-					query: "query { example }",
-					variables: "{}",
-					explanation: "",
-				};
-			}
-
-			const result = {
-				query: "",
-				variables: "{}",
-				explanation: "",
-			};
-
-			const queryPattern = /<query>([\s\S]*?)<\/query>/;
-			const variablesPattern = /<variables>([\s\S]*?)<\/variables>/;
-			const explanationPattern = /<explanation>([\s\S]*?)<\/explanation>/;
-
-			const queryMatch = res.text.match(queryPattern);
-			if (queryMatch?.[1]) {
-				result.query = queryMatch[1].trim();
-			}
-
-			const variablesMatch = res.text.match(variablesPattern);
-			if (variablesMatch?.[1]) {
-				result.variables = variablesMatch[1].trim();
-			}
-
-			const explanationMatch = res.text.match(explanationPattern);
-			if (explanationMatch?.[1]) {
-				result.explanation = explanationMatch[1].trim();
-			}
-
+		if (!res || !res.text) {
 			return result;
-		} catch (error) {
-			console.error("Error in generateQuery step:", error);
-			throw new Error(`Failed to generate query: ${error}`);
 		}
+
+		const queryPattern = /<query>([\s\S]*?)<\/query>/;
+		const variablesPattern = /<variables>([\s\S]*?)<\/variables>/;
+		const explanationPattern = /<explanation>([\s\S]*?)<\/explanation>/;
+
+		const queryMatch = res.text.match(queryPattern);
+		if (queryMatch?.[1]) {
+			result.query = queryMatch[1].trim();
+		}
+
+		const variablesMatch = res.text.match(variablesPattern);
+		if (variablesMatch?.[1]) {
+			result.variables = variablesMatch[1].trim();
+		}
+
+		const explanationMatch = res.text.match(explanationPattern);
+		if (explanationMatch?.[1]) {
+			result.explanation = explanationMatch[1].trim();
+		}
+
+		const gqlResponse = await graphqlQuery?.execute?.({
+			context: {
+				query: result.query,
+				variables: result.variables,
+			},
+		});
+
+		if (gqlResponse?.success) {
+			result.response = JSON.stringify(gqlResponse.data);
+			result.status = true; // Status is success
+		}
+
+		return result;
 	},
 });
 
@@ -299,105 +305,47 @@ const executeResponseSchema = z.object({
 	error: z.union([z.array(z.unknown()), z.string()]).optional(),
 });
 
-const executeQuery = new Step({
-	id: "executeQuery",
-	outputSchema: executeResponseSchema,
-	execute: async ({ context }) => {
-		try {
-			if (!context) {
-				throw new Error("Context is not available in executeQuery step");
-			}
-
-			const { query, variables, explanation } =
-				context.getStepResult(generateQuery);
-
-			const correctedData = context.getStepResult(fixQuery);
-
-			const queryToUse = correctedData?.correctedQuery || query;
-			const variablesToUse = correctedData?.correctedVariables || variables;
-
-			if (correctedData?.correctedQuery) {
-				console.log("Using corrected query:", queryToUse);
-				console.log("Using corrected variables:", variablesToUse);
-			} else {
-				console.log("Using original query:", query);
-				console.log("Using original variables:", variables);
-			}
-
-			const result = await graphqlQuery?.execute?.({
-				context: {
-					query: queryToUse,
-					variables: variablesToUse,
-				},
-			});
-
-			if (result?.success) {
-				return {
-					status: "success" as const,
-					result: JSON.stringify(result.data),
-					error: undefined,
-				};
-			}
-
-			const errorMessage = result?.errors
-				? result?.errors.map((error) => error.message).join(", ")
-				: "No errors found";
-			return {
-				status: "failure" as const,
-				error: errorMessage,
-				result: undefined,
-			};
-		} catch (error) {
-			return {
-				status: "failure" as const,
-				error: error instanceof Error ? error.message : String(error),
-				result: undefined,
-			};
-		}
-	},
-});
-
 const fixQuery = new Step({
 	id: "fixQuery",
 	inputSchema: executeResponseSchema,
-	outputSchema: z.object({
-		correctedQuery: z.string(),
-		correctedVariables: z.string(),
-	}),
+	outputSchema: queryResponse,
 	execute: async ({ context }) => {
-		try {
-			const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
-			const schemaData = context?.getStepResult(fetchSchema);
-			const sourceCodeData = context?.getStepResult(sourceCode);
-			const queryData = context?.getStepResult(generateQuery);
-			const executeResponse = context?.inputData;
+		const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
+		const schemaData = context?.getStepResult(fetchSchema);
+		const sourceCodeData = context?.getStepResult(sourceCode);
+		const queryData = context?.getStepResult(generateQuery);
+		const executeResponse = context?.inputData;
 
-			const prompt = triggerData?.prompt;
-			const schema = schemaData?.schema;
-			const relevantSourceCode = sourceCodeData?.relevantSourceCode;
-			const originalQuery = queryData?.query;
-			const originalVariables = queryData?.variables;
-			const originalExplanation = queryData?.explanation;
-			const error = executeResponse?.error;
+		const prompt = triggerData?.prompt;
+		const schema = schemaData?.schema;
+		const relevantSourceCode = sourceCodeData?.relevantSourceCode;
+		const originalQuery = queryData?.query;
+		const originalVariables = queryData?.variables;
+		const originalExplanation = queryData?.explanation;
+		const error = executeResponse?.error;
 
-			console.log({ error });
+		console.log({ error });
 
-			if (
-				!prompt ||
-				!schema ||
-				!originalQuery ||
-				!originalVariables ||
-				relevantSourceCode === undefined ||
-				!error
-			) {
-				throw new Error(
-					`Missing required data for fixQuery: prompt=${!!prompt}, schema=${!!schema}, relevantSourceCode=${relevantSourceCode !== undefined}, originalQuery=${!!originalQuery}, originalVariables=${!!originalVariables}, error=${!!error}`,
-				);
-			}
+		if (
+			!prompt ||
+			!schema ||
+			!originalQuery ||
+			!originalVariables ||
+			relevantSourceCode === undefined ||
+			!error
+		) {
+			return {
+				response: "",
+				query: "",
+				variables: "",
+				explanation: "Missing required data for fixQuery step",
+				status: false, // Status is failure
+			};
+		}
 
-			const parsedSchema = JSON.parse(schema);
-			const mermaid = generateMermaidDiagram(parsedSchema);
-			const fixQueryPrompt = `
+		const parsedSchema = JSON.parse(schema);
+		const mermaid = generateMermaidDiagram(parsedSchema);
+		const fixQueryPrompt = `
 			You are an AI assistant specialized in fixing GraphQL queries that have failed to execute. Your task is to analyze the error, review the schema, and provide a corrected version of the query and variables that will successfully run against the GraphQL server.
 
 First, let's review the context and necessary information:
@@ -527,48 +475,72 @@ Now, please proceed with your analysis and correction of the failed GraphQL quer
 You are an AI assistant tasked with fixing a GraphQL query that failed to execute. Your goal is to correct the query and variables so they can successfully run against the GraphQL server.
 			`;
 
-			const res = await gqlExecutionAgent.generate(fixQueryPrompt);
+		const res = await gqlExecutionAgent.generate(fixQueryPrompt);
 
-			if (!res || !res.text) {
-				throw new Error("Failed to generate fixed query");
-			}
-
-			const queryPattern = /<query>([\s\S]*?)<\/query>/;
-			const variablesPattern = /<variables>([\s\S]*?)<\/variables>/;
-
-			const queryMatch = res.text.match(queryPattern);
-			const variablesMatch = res.text.match(variablesPattern);
-
-			if (!queryMatch && !variablesMatch) {
-				throw new Error("No fixed query or variables found");
-			}
-
-			if (queryMatch && variablesMatch) {
-				const correctedQuery = queryMatch?.[1]
-					? queryMatch[1].trim()
-					: originalQuery;
-				const correctedVariables = variablesMatch?.[1]
-					? variablesMatch[1].trim()
-					: originalVariables;
-
-				return {
-					correctedQuery,
-					correctedVariables,
-				};
-			}
-			throw new Error("Failed to extract fixed query and variables");
-		} catch (error) {
-			console.error("Error in fixQuery step:", error);
+		if (!res || !res.text) {
 			return {
-				correctedQuery: "",
-				correctedVariables: "{}",
+				response: "",
+				query: "",
+				variables: "",
+				explanation: "Failed to generate fixed query",
+				status: false, // Status is failure
 			};
 		}
+
+		const queryPattern = /<query>([\s\S]*?)<\/query>/;
+		const variablesPattern = /<variables>([\s\S]*?)<\/variables>/;
+
+		const queryMatch = res.text.match(queryPattern);
+		const variablesMatch = res.text.match(variablesPattern);
+
+		if (!queryMatch && !variablesMatch) {
+			return {
+				response: "",
+				query: "",
+				variables: "",
+				explanation: "Failed to generate fixed query",
+				status: false, // Status is failure
+			};
+		}
+
+		if (queryMatch && variablesMatch) {
+			const correctedQuery = queryMatch?.[1]
+				? queryMatch[1].trim()
+				: originalQuery;
+			const correctedVariables = variablesMatch?.[1]
+				? variablesMatch[1].trim()
+				: originalVariables;
+
+			const gqlResponse = await graphqlQuery?.execute?.({
+				context: {
+					query: correctedQuery,
+					variables: correctedVariables,
+				},
+			});
+
+			if (gqlResponse?.success) {
+				return {
+					response: JSON.stringify(gqlResponse.data),
+					query: correctedQuery,
+					variables: correctedVariables,
+					explanation: res.text, // Keep the explanation from the agent
+					status: true, // Status is success
+				};
+			}
+		}
+		return {
+			response: "",
+			query: "",
+			variables: "",
+			explanation: res.text, // Keep the explanation from the agent
+			status: false, // Status is failure
+		};
 	},
 });
 
 const analyzeQuery = new Step({
 	id: "analyzeQuery",
+	inputSchema: queryResponse,
 	outputSchema: z.object({
 		analysis: z.string(),
 		relevance: z.number(),
@@ -576,25 +548,10 @@ const analyzeQuery = new Step({
 	execute: async ({ context }) => {
 		try {
 			const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
-			const queryData = context?.getStepResult(generateQuery);
+			const inputData = context?.inputData;
 
-			let queryResult: unknown;
-
-			const executeData = context?.getStepResult(executeQuery);
-			if (executeData?.status === "success" && executeData?.result) {
-				queryResult = JSON.parse(executeData.result);
-			}
-
-			const prompt = triggerData?.prompt;
-			const query = queryData?.query;
-			const variables = queryData?.variables;
-			const explanation = queryData?.explanation;
-
-			if (!prompt || !query || !variables || !queryResult) {
-				throw new Error(
-					`Missing required data for analyzeQuery: prompt=${!!prompt}, query=${!!query}, variables=${!!variables}, queryResult=${!!queryResult}`,
-				);
-			}
+			const { prompt } = triggerData;
+			const { query, variables, explanation, response } = inputData;
 
 			const analysisPrompt = `
 You are an expert GraphQL analyst who can interpret query results and provide clear insights.
@@ -619,7 +576,7 @@ ${explanation || "No explanation provided."}
 
 Query results:
 \`\`\`json
-${JSON.stringify(queryResult, null, 2)}
+${JSON.stringify(response, null, 2)}
 \`\`\`
 
 Please provide a comprehensive analysis of these results that:
@@ -668,83 +625,38 @@ how well these results answer the original question, where 0 means "not at all r
 });
 
 const graphqlExecution = new Workflow({
+	name: "graphql-execution",
+});
+
+graphqlExecution
+	.step(generateQuery)
+	.then(analyzeQuery, {
+		when: { "generateQuery.status": true }, // Note: Changed from "success" to true based on your schema
+	})
+	.after(generateQuery)
+	.step(fixQuery, {
+		when: { "generateQuery.status": false }, // Note: Changed from "failure" to false
+	});
+
+// Then define and commit the main workflow, using the execution workflow as a step
+const graphqlWorkflow = new Workflow({
 	name: "graphql-workflow",
 	triggerSchema: z.object({
 		prompt: z.string(),
 	}),
 });
 
-const executeQuery1 = new Step({
-	...executeQuery,
-	id: "executeQuery1",
-});
-
-const executeQuery2 = new Step({
-	...executeQuery,
-	id: "executeQuery2",
-});
-
-const executeQuery3 = new Step({
-	...executeQuery,
-	id: "executeQuery3",
-});
-
-const fixQuery1 = new Step({
-	...fixQuery,
-	id: "fixQuery1",
-});
-
-const fixQuery2 = new Step({
-	...fixQuery,
-	id: "fixQuery2",
-});
-
-const analyzeQuery1 = new Step({
-	...analyzeQuery,
-	id: "analyzeQuery1",
-});
-
-const analyzeQuery2 = new Step({
-	...analyzeQuery,
-	id: "analyzeQuery2",
-});
-
-const analyzeQuery3 = new Step({
-	...analyzeQuery,
-	id: "analyzeQuery3",
-});
-
-graphqlExecution
+// Add steps to the main workflow
+graphqlWorkflow
 	.step(fetchSchema)
 	.then(sourceCode)
-	.then(generateQuery)
-	.then(executeQuery)
-	.then(analyzeQuery, {
-		when: { "executeQuery.status": "success" },
+	.then(graphqlExecution, {
+		// Pass needed variables from parent to nested workflow
+		variables: {
+			// Map any necessary variables here if needed
+		},
 	})
-	.after(executeQuery)
-	.step(fixQuery, {
-		when: { "executeQuery.status": "failure" },
-	})
-	.then(executeQuery1)
-	.then(analyzeQuery1, {
-		when: { "executeQuery1.status": "success" },
-	})
-	.after(executeQuery1)
-	.step(fixQuery1, {
-		when: { "executeQuery1.status": "failure" },
-	})
-	.then(executeQuery2)
-	.then(analyzeQuery2, {
-		when: { "executeQuery2.status": "success" },
-	})
-	.after(executeQuery2)
-	.step(fixQuery2, {
-		when: { "executeQuery2.status": "failure" },
-	})
-	.then(executeQuery3)
-	.then(analyzeQuery3);
+	.commit();
 
-graphqlExecution.commit();
-
-export { graphqlExecution };
+// Export both workflows
+export { graphqlWorkflow, graphqlExecution };
