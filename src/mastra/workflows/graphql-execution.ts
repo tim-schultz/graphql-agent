@@ -11,6 +11,7 @@ import {
 	graphqlIntrospection,
 	graphqlQuery,
 } from "../tools";
+import { exec } from "child_process";
 
 const StatusEnum = z.enum(["success", "failure"]);
 type Status = z.infer<typeof StatusEnum>;
@@ -93,12 +94,8 @@ const generateQuery = new Step({
 		console.log("Executing generateQuery step...");
 		try {
 			const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
-			const schemaData = context?.getStepResult<{ schema: string }>(
-				"fetchSchema",
-			);
-			const sourceCodeData = context?.getStepResult<{
-				relevantSourceCode: string;
-			}>("sourceCode");
+			const schemaData = context?.getStepResult(fetchSchema);
+			const sourceCodeData = context?.getStepResult(sourceCode);
 
 			const prompt = triggerData?.prompt;
 			const schema = schemaData?.schema;
@@ -296,37 +293,25 @@ ${prompt}
 	},
 });
 
-const successResponseSchema = z.object({
+const executeResponseSchema = z.object({
 	status: StatusEnum,
-	result: z.string(),
+	result: z.string().optional(),
+	error: z.union([z.array(z.unknown()), z.string()]).optional(),
 });
-
-const errorResponseSchema = z.object({
-	status: StatusEnum,
-	error: z.union([z.array(z.unknown()), z.string()]),
-});
-
-const resultSchema = z.union([successResponseSchema, errorResponseSchema]);
 
 const executeQuery = new Step({
 	id: "executeQuery",
-	outputSchema: resultSchema,
+	outputSchema: executeResponseSchema,
 	execute: async ({ context }) => {
 		try {
 			if (!context) {
 				throw new Error("Context is not available in executeQuery step");
 			}
 
-			const { query, variables, explanation } = context.getStepResult<{
-				query: string;
-				variables: string;
-				explanation: string;
-			}>("generateQuery");
+			const { query, variables, explanation } =
+				context.getStepResult(generateQuery);
 
-			const correctedData = context.getStepResult<{
-				correctedQuery?: string;
-				correctedVariables?: string;
-			}>("fixQuery");
+			const correctedData = context.getStepResult(fixQuery);
 
 			const queryToUse = correctedData?.correctedQuery || query;
 			const variablesToUse = correctedData?.correctedVariables || variables;
@@ -350,6 +335,7 @@ const executeQuery = new Step({
 				return {
 					status: "success" as const,
 					result: JSON.stringify(result.data),
+					error: undefined,
 				};
 			}
 
@@ -359,11 +345,13 @@ const executeQuery = new Step({
 			return {
 				status: "failure" as const,
 				error: errorMessage,
+				result: undefined,
 			};
 		} catch (error) {
 			return {
 				status: "failure" as const,
 				error: error instanceof Error ? error.message : String(error),
+				result: undefined,
 			};
 		}
 	},
@@ -371,6 +359,7 @@ const executeQuery = new Step({
 
 const fixQuery = new Step({
 	id: "fixQuery",
+	inputSchema: executeResponseSchema,
 	outputSchema: z.object({
 		correctedQuery: z.string(),
 		correctedVariables: z.string(),
@@ -378,22 +367,10 @@ const fixQuery = new Step({
 	execute: async ({ context }) => {
 		try {
 			const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
-			const schemaData = context?.getStepResult<{ schema: string }>(
-				"fetchSchema",
-			);
-			const sourceCodeData = context?.getStepResult<{
-				relevantSourceCode: string;
-			}>("sourceCode");
-			const queryData = context?.getStepResult<{
-				query: string;
-				variables: string;
-				explanation: string;
-			}>("generateQuery");
-			const executeData = context?.getStepResult<{
-				status: Status;
-				error: unknown;
-				result?: string;
-			}>("executeQuery");
+			const schemaData = context?.getStepResult(fetchSchema);
+			const sourceCodeData = context?.getStepResult(sourceCode);
+			const queryData = context?.getStepResult(generateQuery);
+			const executeResponse = context?.inputData;
 
 			const prompt = triggerData?.prompt;
 			const schema = schemaData?.schema;
@@ -401,7 +378,7 @@ const fixQuery = new Step({
 			const originalQuery = queryData?.query;
 			const originalVariables = queryData?.variables;
 			const originalExplanation = queryData?.explanation;
-			const error = executeData?.error;
+			const error = executeResponse?.error;
 
 			console.log({ error });
 
@@ -599,31 +576,13 @@ const analyzeQuery = new Step({
 	execute: async ({ context }) => {
 		try {
 			const triggerData = context?.getStepResult<{ prompt: string }>("trigger");
-			const queryData = context?.getStepResult<{
-				query: string;
-				variables: string;
-				explanation: string;
-			}>("generateQuery");
+			const queryData = context?.getStepResult(generateQuery);
 
-			let resultData: unknown;
 			let queryResult: unknown;
 
-			const executeData = context?.getStepResult<{
-				status: Status;
-				result?: string;
-			}>("executeQuery");
+			const executeData = context?.getStepResult(executeQuery);
 			if (executeData?.status === "success" && executeData?.result) {
-				resultData = executeData;
 				queryResult = JSON.parse(executeData.result);
-			} else {
-				const fixData = context?.getStepResult<{
-					status: Status;
-					result?: string;
-				}>("fixQuery");
-				if (fixData?.status === "success" && fixData?.result) {
-					resultData = fixData;
-					queryResult = JSON.parse(fixData.result);
-				}
 			}
 
 			const prompt = triggerData?.prompt;
@@ -631,9 +590,9 @@ const analyzeQuery = new Step({
 			const variables = queryData?.variables;
 			const explanation = queryData?.explanation;
 
-			if (!prompt || !query || !variables || !resultData || !queryResult) {
+			if (!prompt || !query || !variables || !queryResult) {
 				throw new Error(
-					`Missing required data for analyzeQuery: prompt=${!!prompt}, query=${!!query}, variables=${!!variables}, resultData=${!!resultData}, queryResult=${!!queryResult}`,
+					`Missing required data for analyzeQuery: prompt=${!!prompt}, query=${!!query}, variables=${!!variables}, queryResult=${!!queryResult}`,
 				);
 			}
 
@@ -715,22 +674,51 @@ const graphqlExecution = new Workflow({
 	}),
 });
 
+const executeQuery1 = new Step({
+	...executeQuery,
+	id: "executeQuery1",
+});
+
+const executeQuery2 = new Step({
+	...executeQuery,
+	id: "executeQuery2",
+});
+
+const executeQuery3 = new Step({
+	...executeQuery,
+	id: "executeQuery3",
+});
+
+const fixQuery1 = new Step({
+	...fixQuery,
+	id: "fixQuery1",
+});
+
+const fixQuery2 = new Step({
+	...fixQuery,
+	id: "fixQuery2",
+});
+
+const analyzeQuery1 = new Step({
+	...analyzeQuery,
+	id: "analyzeQuery1",
+});
+
+const analyzeQuery2 = new Step({
+	...analyzeQuery,
+	id: "analyzeQuery2",
+});
+
+const analyzeQuery3 = new Step({
+	...analyzeQuery,
+	id: "analyzeQuery3",
+});
+
 graphqlExecution
 	.step(fetchSchema)
 	.then(sourceCode)
 	.then(generateQuery)
 	.then(executeQuery)
-
-	// Success path
-	.then(analyzeQuery, {
-		when: { "executeQuery.status": "success" },
-	})
-
-	// Failure path - first attempt
-	.after(executeQuery)
-	.step(fixQuery, {
-		when: { "executeQuery.status": "failure" },
-	})
 	.then(analyzeQuery, {
 		when: { "executeQuery.status": "success" },
 	})
@@ -738,9 +726,24 @@ graphqlExecution
 	.step(fixQuery, {
 		when: { "executeQuery.status": "failure" },
 	})
-	.then(executeQuery);
-
-//   .step(executeQuery);
+	.then(executeQuery1)
+	.then(analyzeQuery1, {
+		when: { "executeQuery1.status": "success" },
+	})
+	.after(executeQuery1)
+	.step(fixQuery1, {
+		when: { "executeQuery1.status": "failure" },
+	})
+	.then(executeQuery2)
+	.then(analyzeQuery2, {
+		when: { "executeQuery2.status": "success" },
+	})
+	.after(executeQuery2)
+	.step(fixQuery2, {
+		when: { "executeQuery2.status": "failure" },
+	})
+	.then(executeQuery3)
+	.then(analyzeQuery3);
 
 graphqlExecution.commit();
 
