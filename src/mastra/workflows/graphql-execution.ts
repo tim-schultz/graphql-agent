@@ -1,4 +1,4 @@
-import { Workflow } from "@mastra/core/workflows";
+import { Step, Workflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import {
 	analyzeQuery,
@@ -11,7 +11,7 @@ import {
 
 // Create a nested workflow to handle query execution
 const newQueryAnalysis = new Workflow({
-	name: "new-query-analysis",
+	name: "newQueryAnalysis",
 	// Define a specific schema for inputs to this nested workflow
 	triggerSchema: z.object({
 		prompt: z.string(),
@@ -20,12 +20,16 @@ const newQueryAnalysis = new Workflow({
 	.step(fetchSchema)
 	.then(sourceCode)
 	.then(generateQuery)
-	.then(analyzeQuery)
+	.then(analyzeQuery, {
+		when: {
+			"generateQuery.success": "true",
+		},
+	})
 	.commit();
 
 // Define the main workflow
 const fixQueryAnalysis = new Workflow({
-	name: "fix-query-analysis",
+	name: "fixQueryAnalysis",
 	triggerSchema: fixQueryInputSchema,
 })
 	.step(fixQuery)

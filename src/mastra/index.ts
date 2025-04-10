@@ -6,7 +6,7 @@ import {
 	gqlExecutionAgent,
 	gqlIntrospectAgent,
 } from "./agents";
-import { newQueryAnalysis, fixQueryAnalysis } from "./workflows";
+import { fixQueryAnalysis, newQueryAnalysis } from "./workflows";
 
 export const mastra = new Mastra({
 	workflows: { newQueryAnalysis, fixQueryAnalysis },

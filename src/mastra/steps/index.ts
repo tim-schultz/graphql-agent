@@ -13,35 +13,36 @@ import {
 } from "../tools";
 
 // Define common schema types to be reused across steps and workflows
-const StatusEnum = z.enum(["success", "failure"]);
-type Status = z.infer<typeof StatusEnum>;
+const status = z.enum(["success", "failed", "suspended", "waiting", "skipped"]);
 
 // Define schemas for data passing between steps
-const schemaData = z.object({
+const schemaOutput = z.object({
 	schema: z.string(),
 });
 
-const sourceCodeData = z.object({
+const sourceCodeOutput = z.object({
 	relevantSourceCode: z.string(),
 });
 
-const queryResponseData = z.object({
-	status: z.boolean(),
+const queryOutput = z.object({
+	status,
 	query: z.string(),
 	variables: z.string(),
 	explanation: z.string(),
 	response: z.string(),
+	errors: z.string().optional(),
 });
 
 const analysisData = z.object({
 	analysis: z.string(),
 	relevance: z.number(),
+	status,
 });
 
 // Step to fetch GraphQL schema
 export const fetchSchema = new Step({
 	id: "fetchSchema",
-	outputSchema: schemaData,
+	outputSchema: schemaOutput,
 	execute: async ({ context }) => {
 		const result = await graphqlIntrospection?.execute?.({ context: {} });
 
@@ -60,9 +61,12 @@ export const fetchSchema = new Step({
 // Step to fetch relevant source code for the query
 export const sourceCode = new Step({
 	id: "sourceCode",
-	outputSchema: sourceCodeData,
+	outputSchema: sourceCodeOutput,
 	execute: async ({ context }) => {
-		const prompt = context.inputData.prompt;
+		const prompt = context?.getStepResult<{ prompt: string }>(
+			"trigger",
+		)?.prompt;
+
 		if (!prompt) {
 			throw new Error("Prompt not found in sourceCode step");
 		}
@@ -110,18 +114,22 @@ export const generateInputSchema = z.object({
 
 export const generateQuery = new Step({
 	id: "generateQuery",
-	inputSchema: generateInputSchema,
-	outputSchema: queryResponseData,
+	outputSchema: queryOutput,
 	execute: async ({ context }) => {
 		console.log("Executing generateQuery step...");
-		const { prompt, schema, relevantSourceCode } = context.inputData;
+		const prompt = context?.getStepResult<{ prompt: string }>(
+			"trigger",
+		)?.prompt;
+		const { schema } = context.getStepResult(fetchSchema);
+		const { relevantSourceCode } = context.getStepResult(sourceCode);
 
 		const result = {
 			query: "",
 			variables: "{}",
 			explanation: "",
 			response: "",
-			status: false,
+			status: "failure",
+			errors: "",
 		};
 
 		if (!prompt || !schema || relevantSourceCode === undefined) {
@@ -303,12 +311,24 @@ ${prompt}
 			},
 		});
 
+		console.log("GraphQL response:", gqlResponse);
 		if (gqlResponse?.success) {
-			result.response = JSON.stringify(gqlResponse.data);
-			result.status = true; // Status is success
+			console.log("GraphQL response status:", gqlResponse.data);
+			return {
+				...result,
+				response: JSON.stringify(gqlResponse.data),
+				status: "success",
+			};
 		}
 
-		return result;
+		console.log("GraphQL response FAILURE:", gqlResponse);
+
+		return {
+			...result,
+			response: JSON.stringify(gqlResponse?.message),
+			status: "failure",
+			errors: JSON.stringify(gqlResponse?.errors),
+		};
 	},
 });
 
@@ -320,7 +340,7 @@ export const fixQueryInputSchema = z.object({
 		query: z.string(),
 		variables: z.string(),
 		explanation: z.string(),
-		error: z.union([z.array(z.unknown()), z.string()]),
+		error: z.string(),
 	}),
 });
 
@@ -328,7 +348,7 @@ export const fixQueryInputSchema = z.object({
 export const fixQuery = new Step({
 	id: "fixQuery",
 	inputSchema: fixQueryInputSchema,
-	outputSchema: queryResponseData,
+	outputSchema: queryOutput,
 	execute: async ({ context }) => {
 		const { prompt, schema, relevantSourceCode, failedQuery } =
 			context.inputData;
@@ -354,7 +374,8 @@ export const fixQuery = new Step({
 				query: "",
 				variables: "",
 				explanation: "Missing required data for fixQuery step",
-				status: false,
+				status: "failure",
+				errors: "",
 			};
 		}
 
@@ -498,7 +519,7 @@ You are an AI assistant tasked with fixing a GraphQL query that failed to execut
 				query: "",
 				variables: "",
 				explanation: "Failed to generate fixed query",
-				status: false,
+				status: "failure",
 			};
 		}
 
@@ -510,11 +531,11 @@ You are an AI assistant tasked with fixing a GraphQL query that failed to execut
 
 		if (!queryMatch && !variablesMatch) {
 			return {
-				response: "",
+				response: "AI Did not generate a fixed query",
 				query: "",
 				variables: "",
 				explanation: "Failed to generate fixed query",
-				status: false,
+				status: "failure",
 			};
 		}
 
@@ -539,16 +560,24 @@ You are an AI assistant tasked with fixing a GraphQL query that failed to execut
 					query: correctedQuery,
 					variables: correctedVariables,
 					explanation: res.text,
-					status: true,
+					status: "success",
 				};
 			}
+			return {
+				response: "Did not return a successfully executing query",
+				query: "",
+				variables: "",
+				explanation: res.text,
+				status: "failure",
+				errors: JSON.stringify(gqlResponse?.errors),
+			};
 		}
 		return {
-			response: "",
+			response: "Did not return an updated query",
 			query: "",
 			variables: "",
 			explanation: res.text,
-			status: false,
+			status: "failure",
 		};
 	},
 });
@@ -558,13 +587,14 @@ export const analyzeQuery = new Step({
 	id: "analyzeQuery",
 	inputSchema: z.object({
 		prompt: z.string(),
-		queryData: queryResponseData,
+		queryData: queryOutput,
 	}),
 	outputSchema: analysisData,
 	execute: async ({ context }) => {
 		try {
 			const { prompt, queryData } = context.inputData;
-			const { query, variables, explanation, response } = queryData;
+			const { query, variables, explanation, response } =
+				context.getStepResult(generateQuery);
 
 			const analysisPrompt = `
 You are an expert GraphQL analyst who can interpret query results and provide clear insights.
@@ -613,6 +643,7 @@ how well these results answer the original question, where 0 means "not at all r
 				return {
 					analysis: "Failed to analyze the query results.",
 					relevance: 0,
+					status: "failure",
 				};
 			}
 
@@ -626,12 +657,14 @@ how well these results answer the original question, where 0 means "not at all r
 			return {
 				analysis: res.text,
 				relevance: relevanceScore,
+				status: "success",
 			};
 		} catch (error) {
 			console.error("Error in analyzeQuery step:", error);
 			return {
 				analysis: `Failed to analyze query results: ${error instanceof Error ? error.message : String(error)}`,
 				relevance: 0,
+				status: "failure",
 			};
 		}
 	},
