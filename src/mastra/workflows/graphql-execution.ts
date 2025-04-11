@@ -1,4 +1,4 @@
-import { Step, Workflow } from "@mastra/core/workflows";
+import { Workflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import {
 	analyzeQuery,
@@ -20,7 +20,8 @@ const newQueryAnalysis = new Workflow({
 	.step(fetchSchema)
 	.then(sourceCode)
 	.then(generateQuery)
-	.then(analyzeQuery, {
+	.after(generateQuery)
+	.step(analyzeQuery, {
 		when: {
 			"generateQuery.success": "true",
 		},
@@ -33,7 +34,12 @@ const fixQueryAnalysis = new Workflow({
 	triggerSchema: fixQueryInputSchema,
 })
 	.step(fixQuery)
-	.then(analyzeQuery)
+	.after(fixQuery)
+	.step(analyzeQuery, {
+		when: {
+			"generateQuery.success": "true",
+		},
+	})
 	.commit();
 
 // Export both workflows

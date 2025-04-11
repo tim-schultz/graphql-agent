@@ -12,9 +12,6 @@ import {
 	graphqlQuery,
 } from "../tools";
 
-// Define common schema types to be reused across steps and workflows
-const status = z.enum(["success", "failed", "suspended", "waiting", "skipped"]);
-
 // Define schemas for data passing between steps
 const schemaOutput = z.object({
 	schema: z.string(),
@@ -25,7 +22,7 @@ const sourceCodeOutput = z.object({
 });
 
 const queryOutput = z.object({
-	status,
+	success: z.boolean(),
 	query: z.string(),
 	variables: z.string(),
 	explanation: z.string(),
@@ -36,7 +33,7 @@ const queryOutput = z.object({
 const analysisData = z.object({
 	analysis: z.string(),
 	relevance: z.number(),
-	status,
+	success: z.boolean(),
 });
 
 // Step to fetch GraphQL schema
@@ -128,7 +125,7 @@ export const generateQuery = new Step({
 			variables: "{}",
 			explanation: "",
 			response: "",
-			status: "failure",
+			success: false,
 			errors: "",
 		};
 
@@ -317,16 +314,16 @@ ${prompt}
 			return {
 				...result,
 				response: JSON.stringify(gqlResponse.data),
-				status: "success",
+				success: true,
 			};
 		}
 
-		console.log("GraphQL response FAILURE:", gqlResponse);
+		console.log("GraphQL response failed:", gqlResponse);
 
 		return {
 			...result,
 			response: JSON.stringify(gqlResponse?.message),
-			status: "failure",
+			success: false,
 			errors: JSON.stringify(gqlResponse?.errors),
 		};
 	},
@@ -374,7 +371,7 @@ export const fixQuery = new Step({
 				query: "",
 				variables: "",
 				explanation: "Missing required data for fixQuery step",
-				status: "failure",
+				success: false,
 				errors: "",
 			};
 		}
@@ -519,7 +516,7 @@ You are an AI assistant tasked with fixing a GraphQL query that failed to execut
 				query: "",
 				variables: "",
 				explanation: "Failed to generate fixed query",
-				status: "failure",
+				success: false,
 			};
 		}
 
@@ -535,7 +532,7 @@ You are an AI assistant tasked with fixing a GraphQL query that failed to execut
 				query: "",
 				variables: "",
 				explanation: "Failed to generate fixed query",
-				status: "failure",
+				success: false,
 			};
 		}
 
@@ -560,7 +557,7 @@ You are an AI assistant tasked with fixing a GraphQL query that failed to execut
 					query: correctedQuery,
 					variables: correctedVariables,
 					explanation: res.text,
-					status: "success",
+					success: true,
 				};
 			}
 			return {
@@ -568,7 +565,7 @@ You are an AI assistant tasked with fixing a GraphQL query that failed to execut
 				query: "",
 				variables: "",
 				explanation: res.text,
-				status: "failure",
+				success: false,
 				errors: JSON.stringify(gqlResponse?.errors),
 			};
 		}
@@ -577,7 +574,7 @@ You are an AI assistant tasked with fixing a GraphQL query that failed to execut
 			query: "",
 			variables: "",
 			explanation: res.text,
-			status: "failure",
+			success: false,
 		};
 	},
 });
@@ -643,7 +640,7 @@ how well these results answer the original question, where 0 means "not at all r
 				return {
 					analysis: "Failed to analyze the query results.",
 					relevance: 0,
-					status: "failure",
+					success: false,
 				};
 			}
 
@@ -657,14 +654,14 @@ how well these results answer the original question, where 0 means "not at all r
 			return {
 				analysis: res.text,
 				relevance: relevanceScore,
-				status: "success",
+				success: true,
 			};
 		} catch (error) {
 			console.error("Error in analyzeQuery step:", error);
 			return {
 				analysis: `Failed to analyze query results: ${error instanceof Error ? error.message : String(error)}`,
 				relevance: 0,
-				status: "failure",
+				success: false,
 			};
 		}
 	},
