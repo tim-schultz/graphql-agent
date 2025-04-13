@@ -16,7 +16,7 @@ export const mastra = new Mastra({
 		gqlIntrospectAgent,
 		gqlExecutionAgent,
 		analysisAgent,
-		graphqlQueryAgent
+		graphqlQueryAgent,
 	},
 	logger: createLogger({
 		name: "Mastra",

@@ -11,27 +11,25 @@ type StepResult<T = unknown> = {
 };
 
 // Helper function to safely get step output
-function getStepOutput<T>(
-	result: {
-		results: Record<string, { status?: string; output?: unknown }>;
-		activePaths?: Map<string, { status: string; suspendPayload?: unknown }>;
-	},
-): T {
+function getStepOutput<T>(result: {
+	results: Record<string, { status?: string; output?: unknown }>;
+	activePaths?: Map<string, { status: string; suspendPayload?: unknown }>;
+}): T {
 	console.log("getStepOutput", result);
-	
+
 	// Get the last executed step from activePaths
 	if (result.activePaths && result.activePaths.size > 0) {
 		// Get the first (and only) key from the activePaths Map
 		const lastStepId = Array.from(result.activePaths.keys())[0];
-		
+
 		// Get the result for this step
 		const stepResult = result.results[lastStepId];
-		console.log("stepResult", stepResult);	
+		console.log("stepResult", stepResult);
 		if (stepResult?.status === "success" && stepResult.output) {
 			return stepResult.output as T;
 		}
 	}
-	
+
 	throw new Error("unable to get step output");
 }
 
@@ -69,7 +67,6 @@ export const newQueryAnalysisTool = createTool({
 			success?: boolean;
 			errors?: string;
 		}>(result);
-
 
 		console.log("fixQueryOutput", generateQueryOutput, result);
 

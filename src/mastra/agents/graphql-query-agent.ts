@@ -1,7 +1,10 @@
-import { Agent } from "@mastra/core/agent";
 import { openai } from "@ai-sdk/openai";
+import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
-import { newQueryAnalysisTool, fixQueryAnalysisTool } from "../tools/workflow-tools";
+import {
+	fixQueryAnalysisTool,
+	newQueryAnalysisTool,
+} from "../tools/workflow-tools";
 
 const tools = {
 	newQueryAnalysis: newQueryAnalysisTool,
@@ -46,5 +49,5 @@ Remember to:
 `,
 	model: openai("o3-mini-2025-01-31"),
 	tools,
-    memory
+	memory,
 });
