@@ -348,7 +348,7 @@ export const fixQuery = new Step({
 	outputSchema: queryOutput,
 	execute: async ({ context }) => {
 		const { prompt, schema, relevantSourceCode, failedQuery } =
-			context.inputData;
+			context.triggerData;
 		const {
 			query: originalQuery,
 			variables: originalVariables,

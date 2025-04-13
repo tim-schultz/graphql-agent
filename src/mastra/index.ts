@@ -5,6 +5,7 @@ import {
 	gitcoinAgent,
 	gqlExecutionAgent,
 	gqlIntrospectAgent,
+	graphqlQueryAgent,
 } from "./agents";
 import { fixQueryAnalysis, newQueryAnalysis } from "./workflows";
 
@@ -15,6 +16,7 @@ export const mastra = new Mastra({
 		gqlIntrospectAgent,
 		gqlExecutionAgent,
 		analysisAgent,
+		graphqlQueryAgent
 	},
 	logger: createLogger({
 		name: "Mastra",

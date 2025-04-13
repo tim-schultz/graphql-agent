@@ -55,3 +55,5 @@ export const gitcoinAgent = new Agent({
   - If a query fails, analyze why and adjust parameters to try again`,
 	model: openai("o3-mini-2025-01-31"),
 });
+
+export { graphqlQueryAgent } from "./graphql-query-agent";
