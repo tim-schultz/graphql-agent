@@ -1,13 +1,19 @@
 import { Workflow } from "@mastra/core/workflows";
 import { z } from "zod";
-import {
-	analyzeQuery,
-	fetchSchema,
-	fixQuery,
-	fixQueryInputSchema,
-	generateQuery,
-	sourceCode,
-} from "../steps";
+import { analyzeQuery, fixQuery, generateQuery } from "../steps";
+import { fetchSchema, sourceCode } from "../steps/generate-query";
+import { fixQueryInputSchema } from "../steps/types";
+
+const planInitialQuery = new Workflow({
+	name: "planInitialQuery",
+	triggerSchema: z.object({
+		prompt: z.string(),
+	}),
+})
+	.step(fetchSchema)
+	.then(sourceCode)
+	.then(generateQuery)
+	.commit();
 
 // Create a nested workflow to handle query execution
 const newQueryAnalysis = new Workflow({
@@ -33,7 +39,9 @@ const fixQueryAnalysis = new Workflow({
 	name: "fixQueryAnalysis",
 	triggerSchema: fixQueryInputSchema,
 })
-	.step(fixQuery)
+	.step(fetchSchema)
+	.then(sourceCode)
+	.then(fixQuery)
 	.after(fixQuery)
 	.step(analyzeQuery, {
 		when: {
@@ -43,4 +51,4 @@ const fixQueryAnalysis = new Workflow({
 	.commit();
 
 // Export both workflows
-export { newQueryAnalysis, fixQueryAnalysis };
+export { newQueryAnalysis, fixQueryAnalysis, planInitialQuery };

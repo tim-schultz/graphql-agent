@@ -1,9 +1,10 @@
-import { Step } from "@mastra/core";
+import { Step, type WorkflowContext } from "@mastra/core";
 import { z } from "zod";
-import { fixQueryInputSchema, queryOutput } from ".";
 import { generateMermaidDiagram } from "../../scripts/diagram-gql-schema";
 import { gqlExecutionAgent } from "../agents";
 import { graphqlQuery } from "../tools";
+import { fetchSchema, sourceCode } from "./generate-query";
+import { fixQueryInputSchema, queryOutput } from "./types";
 
 // Define the structure of the trigger data expected by the fixQuery step
 const FixQueryTriggerDataSchema = z.object({
@@ -33,14 +34,30 @@ type ExecuteQueryResult = {
 /**
  * Validates the input data for the fixQuery step.
  */
-function validateInputData(context: {
-	triggerData: unknown;
-}): FixQueryTriggerData | null {
-	const result = FixQueryTriggerDataSchema.safeParse(context.triggerData);
+function validateInputData(
+	context: WorkflowContext,
+): FixQueryTriggerData | null {
+	console.log("Validating input data for fixQuery...");
+	const schema = context.getStepResult(fetchSchema);
+	const relevantSourceCode = context.getStepResult(sourceCode);
+	const inputData = {
+		prompt: context.triggerData.prompt,
+		schema: schema.schema,
+		relevantSourceCode: relevantSourceCode.relevantSourceCode,
+		failedQuery: {
+			query: context.triggerData.query,
+			variables: context.triggerData.variables,
+			explanation: context.triggerData.explanation,
+			error: context.triggerData.error,
+		},
+	};
+
+	const result = FixQueryTriggerDataSchema.safeParse(inputData);
 	if (!result.success) {
-		console.error("Invalid input data:", result.error);
+		console.error("Invalid input data for fixQuery:", result.error.flatten());
 		return null;
 	}
+	console.log("Input data validated successfully for fixQuery.");
 	return result.data;
 }
 
@@ -189,11 +206,15 @@ You are an AI assistant tasked with fixing a GraphQL query that failed to execut
  * Calls the AI agent to generate the fixed query and variables.
  */
 async function generateFixedQuery(prompt: string): Promise<string | null> {
+	console.log("Calling AI agent to fix query...");
 	const res = await gqlExecutionAgent.generate(prompt);
 	if (!res?.text) {
-		console.error("AI agent failed to generate response.");
+		console.error("AI agent failed to generate response text for fixQuery.");
 		return null;
 	}
+	console.log(
+		`AI agent returned response of length: ${res.text.length} for fixQuery`,
+	);
 	return res.text;
 }
 
@@ -206,8 +227,10 @@ function parseAgentResponse(
 	originalVariables: string,
 ): ParsedAgentResponse | null {
 	if (!responseText) {
+		console.error("Cannot parse agent response: responseText is null.");
 		return null;
 	}
+	console.log("Parsing AI agent response for fixQuery...");
 
 	const queryPattern = /<query>([\s\S]*?)<\/query>/;
 	const variablesPattern = /<variables>([\s\S]*?)<\/variables>/;
@@ -217,7 +240,7 @@ function parseAgentResponse(
 
 	if (!queryMatch || !variablesMatch) {
 		console.error(
-			"AI did not return query and variables in the expected format.",
+			"AI did not return query and variables in the expected format for fixQuery.",
 		);
 		return {
 			query: "",
@@ -231,11 +254,15 @@ function parseAgentResponse(
 		? variablesMatch[1].trim()
 		: originalVariables;
 
-	return {
+	const result = {
 		query: correctedQuery,
 		variables: correctedVariables,
 		rawResponse: responseText,
 	};
+	console.log(
+		`Parsed agent response for fixQuery. Query found: ${!!result.query}, Variables found: ${!!result.variables}`,
+	);
+	return result;
 }
 
 /**
@@ -246,15 +273,27 @@ async function executeFixedQuery(
 	variables: string,
 ): Promise<ExecuteQueryResult> {
 	if (!query || !variables) {
+		console.error("Cannot execute fixed query: Missing query or variables.");
 		return { success: false, errors: "Missing query or variables" };
 	}
+	console.log("Executing potentially fixed GraphQL query...");
+	console.log(`Query: ${query}`);
+	console.log(`Variables: ${variables}`);
 
 	const gqlResponse = await graphqlQuery?.execute?.({
 		context: { query, variables },
 	});
 
+	const success = gqlResponse?.success ?? false;
+	console.log(
+		`Fixed query execution result: ${success ? "Success" : "Failure"}`,
+	);
+	if (!success) {
+		console.error("Fixed query execution failed:", gqlResponse?.errors);
+	}
+
 	return {
-		success: gqlResponse?.success ?? false,
+		success: success,
 		data: gqlResponse?.data,
 		errors: gqlResponse?.errors,
 	};
@@ -266,8 +305,10 @@ export const fixQuery = new Step({
 	inputSchema: fixQueryInputSchema,
 	outputSchema: queryOutput,
 	execute: async ({ context }) => {
+		console.log("Executing fixQuery step...");
 		const inputData = validateInputData(context);
 		if (!inputData) {
+			console.error("fixQuery step failed: Invalid input data.");
 			return {
 				response: "",
 				query: "",
@@ -282,9 +323,11 @@ export const fixQuery = new Step({
 		const { query: originalQuery, variables: originalVariables } = failedQuery;
 
 		const fixPrompt = generateFixQueryPrompt(inputData);
+		console.log("Generated fix query prompt.");
 		const agentResponseText = await generateFixedQuery(fixPrompt);
 
 		if (!agentResponseText) {
+			console.error("fixQuery step failed: AI agent did not return text.");
 			return {
 				response: "",
 				query: "",
@@ -301,6 +344,9 @@ export const fixQuery = new Step({
 		);
 
 		if (!parsedResponse || !parsedResponse.query || !parsedResponse.variables) {
+			console.error(
+				"fixQuery step failed: Could not parse query/variables from agent response.",
+			);
 			return {
 				response: "AI Did not generate a fixed query in the expected format",
 				query: "",
@@ -318,7 +364,12 @@ export const fixQuery = new Step({
 			correctedVariables,
 		);
 
+		console.log("Fixed query execution completed.");
+
 		if (executionResult.success) {
+			console.log(
+				"fixQuery step succeeded: Corrected query executed successfully.",
+			);
 			return {
 				response: JSON.stringify(executionResult.data),
 				query: correctedQuery,
@@ -327,6 +378,9 @@ export const fixQuery = new Step({
 				success: true,
 			};
 		}
+		console.warn(
+			"fixQuery step finished, but the corrected query still failed to execute.",
+		);
 		return {
 			response: "Corrected query failed to execute",
 			query: correctedQuery, // Return the attempted query

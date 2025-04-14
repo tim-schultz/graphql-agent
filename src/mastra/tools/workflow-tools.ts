@@ -16,7 +16,6 @@ function getStepOutput<T>(result: {
 	activePaths?: Map<string, { status: string; suspendPayload?: unknown }>;
 }): T {
 	console.log("getStepOutput", result);
-
 	// Get the last executed step from activePaths
 	if (result.activePaths && result.activePaths.size > 0) {
 		// Get the first (and only) key from the activePaths Map
@@ -84,11 +83,9 @@ export const newQueryAnalysisTool = createTool({
 // Create a tool that wraps the fixQueryAnalysis workflow
 export const fixQueryAnalysisTool = createTool({
 	id: "fixQueryAnalysis",
-	description: "Attempts to fix and analyze a failed GraphQL query",
+	description: "Fix, execute, and analyze a prblematic GraphQL query",
 	inputSchema: z.object({
 		prompt: z.string().describe("The original prompt that generated the query"),
-		schema: z.string().describe("The GraphQL schema"),
-		relevantSourceCode: z.string().describe("Relevant source code for context"),
 		query: z.string().describe("The GraphQL query to fix"),
 		variables: z.string().describe("The variables for the query"),
 		explanation: z.string().describe("The explanation of the original query"),
@@ -109,8 +106,6 @@ export const fixQueryAnalysisTool = createTool({
 		const result = await run.start({
 			triggerData: {
 				prompt: context.prompt,
-				schema: context.schema,
-				relevantSourceCode: context.relevantSourceCode,
 				failedQuery: {
 					query: context.query,
 					variables: context.variables,
