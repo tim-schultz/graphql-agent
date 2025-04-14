@@ -1,0 +1,10 @@
+# Configuration for embedding the Gitcoin GraphQL schema
+
+[graphql]
+# The URL of the GraphQL endpoint to introspect and embed
+endpoint = "https://beta.indexer.gitcoin.co/v1/graphql"
+
+# Prefix used for creating PostgreSQL vector collection names
+# e.g., a prefix of "gitcoin_gql" will result in collections like:
+# gitcoin_gql_object_type_definitions, gitcoin_gql_scalar_definitions, etc.
+collection_prefix = "gitcoin_gql"
