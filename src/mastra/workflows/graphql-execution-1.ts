@@ -6,49 +6,46 @@ import { z } from "zod";
 import { gqlExecutionAgent } from "../agents";
 import { analyzeQuery } from "../steps";
 import { sourceCode } from "../steps/generate-query";
-import { POSTGRES_URL, graphqlQuery } from "../tools";
+import { schemaOutput, sourceCodeOutput, typesOutput } from "../steps/types";
+import {
+	POSTGRES_URL,
+	dynamicGitcoinDocs,
+	graphqlQuery,
+	graphqlSourceTypes,
+} from "../tools";
 import { createVectorQueryTool } from "../tools/get-vector-context";
 
 // Infer the tool config type from the create function
 type VectorQueryToolConfig = Parameters<typeof createVectorQueryTool>[2];
 
-const buildContextFromSchema = new Step({
-	id: "buildContextFromSchema",
-	// Define the output structure for this step
-	outputSchema: z.object({
-		queryReference: z.string(), // Placeholder for the combined context
-	}),
-	execute: async ({ context }) => {
-		if (!POSTGRES_URL) {
-			throw new Error(
-				"POSTGRES_URL is not set. Please set it to use vector query tools.",
-			);
-		}
-
-		const { prompt } = context.triggerData;
-
-		const results = await Promise.all([
-			executeQueryWithVectorTool(
-				POSTGRES_URL,
-				"gitcoin_gql",
-				{
-					description: "GraphQL Enum type definitions",
-					topK: 5,
-					threshold: 0.3,
-				},
-				prompt,
-			),
-		]);
-
-		return {
-			queryReference: results.map((result) => result).join("\n"),
-		};
-	},
-});
-
 const generateQueryOutput = z.object({
 	query: z.string(),
 	variables: z.string(),
+});
+
+// Step to fetch GraphQL schema
+export const fetchSchemaDefinition = new Step({
+	id: "fetchSchemaDefinition",
+	outputSchema: typesOutput,
+	execute: async ({ context }) => {
+		const prompt = context?.getStepResult<{ prompt: string }>(
+			"trigger",
+		)?.prompt;
+
+		const result = await graphqlSourceTypes?.execute?.({
+			context: {
+				query: `Type definitions similar to: ${prompt}`,
+			},
+		});
+
+		if (!result?.context) {
+			throw new Error("Failed to fetch GraphQL schema types");
+		}
+
+		return {
+			types: result.results.map((r) => r.metadata.content).join("\n"),
+		};
+	},
 });
 
 const generateQuery = new Step({
@@ -56,59 +53,35 @@ const generateQuery = new Step({
 	// Define the output structure for this step
 	outputSchema: generateQueryOutput,
 	execute: async ({ context }) => {
-		const referenceResult = context.getStepResult(buildContextFromSchema);
+		const referenceResult = context.getStepResult(fetchSchemaDefinition);
 		const sourceCodeResult = context.getStepResult(sourceCode);
+		// 		Also use the following source code context to help answer the question:
+		// ${sourceCodeResult.relevantSourceCode}
+		console.log(referenceResult.types, "referenceResult.types)");
 		const prompt = `
-Craft a query that will answer the following question:
+Your goal is to craft a GraphQL query that will help answer the following question:
 ${context.triggerData.prompt}
 
-Use the following GraphQL Definition nodes to help answer the question:
-${referenceResult.queryReference}
-
-Also use the following source code context to help answer the question:
+Here is relevant documentation to help answer the question:
 ${sourceCodeResult.relevantSourceCode}
+
+Use the following typescript type definitions which represent the available query parameters to help answer the question:
+${referenceResult.types}
+
 
 Here is further context for the active GG23 rounds:
 - All rounds are currently active on Arbitrum network which has a chainId of 42161.
 - The dApps and Apps round has a roundId of 867
 - The Web3 Infrastructure round has a roundId of 865
 - The Developer Tooling and Libraries has a roundId of 863
+- Each round has a series projects that receive donations within a round
 
-It is very important that you produce a valid query that contains only allowed fields.
-
-Below you will find an example of a question along with a valid query that answers it:
-<example>
-User question: "What are the details for the Web3 Infrastructure round?"
-</example>
-
-<query>
-query getRoundDetails($roundId: String!, $chainId: Int!) {
-rounds(
-limit: 1
-where: {
-id: { _eq: $roundId }
-chainId: { _eq: $chainId }
-}
-) {
-id
-chainId
-roundMetadata
-applicationsStartTime
-applicationsEndTime
-donationsStartTime
-donationsEndTime
-}
-}
-</query>
-<variables>
-{
-"roundId": "865",
-"chainId": 42161
-}
-</variables>
 
 IMPORTANT:
 - return variables as stringified JSON
+- produce a valid GRAPHQL query that contains only allowed fields
+- Generate a new query that is valid and will not produce any errors.
+- Make sure to include the variables in the response.
 
 `;
 		const response = await gqlExecutionAgent.generate(prompt, {
@@ -195,7 +168,7 @@ export const graphqlAnalysis1 = new Workflow({
 			),
 	}),
 })
-	.step(buildContextFromSchema)
+	.step(fetchSchemaDefinition)
 	.then(sourceCode)
 	.then(generateQuery)
 	.then(executeQuery)
@@ -217,23 +190,33 @@ export const graphqlAnalysis1 = new Workflow({
 
 				const response = await gqlExecutionAgent.generate(
 					`
-The following query is invalid and needs to be fixed:
-${query}
-The variables are:
-${variables}
+	The following query is invalid and needs to be fixed:
+	${query}
+	The variables are:
+	${variables}
 
-When the query was executed it produced the following error(s):
-${errors}
+	When the query was executed it produced the following error(s):
+	${errors}
 
-Generate a new query that is valid and will not produce any errors.
-Make sure to include the variables in the response.
+	Here are the typescript type definitions which represent the available query parameters to help answer the question:
+	${context.getStepResult(fetchSchemaDefinition).types}
 
-Here is further context for the active GG23 rounds:
-- All rounds are currently active on Arbitrum network which has a chainId of 42161.
-- The dApps and Apps round has a roundId of 867
-- The Web3 Infrastructure round has a roundId of 865
-- The Developer Tooling and Libraries has a roundId of 863
-`,
+	Generate a new query that is valid and will not produce any errors.
+	Make sure to include the variables in the response.
+
+	Here is further context for the active GG23 rounds:
+	- All rounds are currently active on Arbitrum network which has a chainId of 42161.
+	- The dApps and Apps round has a roundId of 867
+	- The Web3 Infrastructure round has a roundId of 865
+	- The Developer Tooling and Libraries has a roundId of 863
+	- Each round has a series projects that receive donations within a round
+
+	IMPORTANT:
+	- return variables as stringified JSON
+	- produce a valid GRAPHQL query that contains only allowed fields
+	- Generate a new query that is valid and will not produce any errors.
+	- Make sure to include the variables in the response.
+	`,
 					{
 						output: generateQueryOutput,
 					},
@@ -243,5 +226,10 @@ Here is further context for the active GG23 rounds:
 		}),
 	)
 	.then(new Step({ ...executeQuery, id: "executeFixedQuery" }))
+	.step(analyzeQuery, {
+		when: {
+			"executeFixedQuery.success": "true",
+		},
+	})
 
 	.commit();

@@ -1,8 +1,9 @@
 import { Workflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import { analyzeQuery, fixQuery, generateQuery } from "../steps";
-import { fetchSchema, sourceCode } from "../steps/generate-query";
+import { sourceCode } from "../steps/generate-query";
 import { fixQueryInputSchema } from "../steps/types";
+import { fetchSchemaDefinition } from "./graphql-execution-1";
 
 // Create a nested workflow to handle query execution
 const newQueryAnalysis = new Workflow({
@@ -12,7 +13,7 @@ const newQueryAnalysis = new Workflow({
 		prompt: z.string(),
 	}),
 })
-	.step(fetchSchema)
+	.step(fetchSchemaDefinition)
 	.then(sourceCode)
 	.then(generateQuery)
 	.after(generateQuery)
@@ -28,7 +29,7 @@ const fixQueryAnalysis = new Workflow({
 	name: "fixQueryAnalysis",
 	triggerSchema: fixQueryInputSchema,
 })
-	.step(fetchSchema)
+	.step(fetchSchemaDefinition)
 	.then(sourceCode)
 	.then(fixQuery)
 	.after(fixQuery)

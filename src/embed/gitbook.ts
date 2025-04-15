@@ -6,7 +6,7 @@ import * as cheerio from "cheerio";
 import slugify from "slugify";
 import TurndownService from "turndown";
 
-import { MastraContentProcessor } from "./content-processor";
+import { ContentProcessor } from "./content-processor"; // Renamed import
 import { logger, withTimeout } from "./utils";
 
 /**
@@ -600,8 +600,9 @@ async function main() {
 		process.exit(1);
 	}
 
-	// 2. Process and Store Content using Mastra
-	const processor = new MastraContentProcessor(pgConnectionString, indexName, {
+	// 2. Process and Store Content using ContentProcessor
+	const processor = new ContentProcessor(pgConnectionString, indexName, {
+		// Renamed constructor call
 		chunkSize: 1000, // Characters per chunk
 		chunkOverlap: 200, // Characters of overlap
 		embeddingModel: "text-embedding-3-small", // OpenAI embedding model

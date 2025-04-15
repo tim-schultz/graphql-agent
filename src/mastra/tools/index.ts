@@ -14,6 +14,8 @@ const GITCOIN_SOURCE_INDEX =
 	process.env.GITCOIN_SOURCE_INDEX || "gitcoin_source_code";
 const SUCCESSFUL_QUERIES_INDEX =
 	process.env.SUCCESSFUL_QUERIES_INDEX || "successful_gql_queries";
+
+const GRAPHQL_TYPES_INDEX = "gitcoin_gql_types";
 const API_TOKEN = process.env.API_TOKEN || "";
 
 /**
@@ -83,10 +85,22 @@ const dynamicGitcoinSourceCode = createVectorQueryTool(
 	},
 );
 
+const graphqlSourceTypes = createVectorQueryTool(
+	POSTGRES_URL,
+	GRAPHQL_TYPES_INDEX,
+	{
+		description:
+			"Retrieve relevant type definitions relating to the queried graphql endpoint",
+		topK: 10,
+		threshold: 0.3,
+	},
+);
+
 export {
 	dynamicGitcoinDocs,
 	dynamicGitcoinSourceCode,
 	alloGithubSmartContract,
+	graphqlSourceTypes,
 };
 
 /**

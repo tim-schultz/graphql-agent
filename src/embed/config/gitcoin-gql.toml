@@ -7,4 +7,4 @@ endpoint = "https://beta.indexer.gitcoin.co/v1/graphql"
 # Prefix used for creating PostgreSQL vector collection names
 # e.g., a prefix of "gitcoin_gql" will result in collections like:
 # gitcoin_gql_object_type_definitions, gitcoin_gql_scalar_definitions, etc.
-collection_prefix = "gitcoin_gql"
+collection_prefix = "gitcoin_gql_types"

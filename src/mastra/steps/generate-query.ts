@@ -7,6 +7,7 @@ import {
 	dynamicGitcoinDocs,
 	graphqlIntrospection,
 	graphqlQuery,
+	graphqlSourceTypes,
 } from "../tools";
 import { queryOutput, schemaOutput, sourceCodeOutput } from "./types";
 
@@ -23,32 +24,32 @@ export const sourceCode = new Step({
 			throw new Error("Prompt not found in sourceCode step");
 		}
 
-		const eventDocuments = await alloGithubSmartContract?.execute?.({
-			context: {
-				query: `Events with @param or @notice similar to: ${prompt}`,
-			},
-		});
+		// const eventDocuments = await alloGithubSmartContract?.execute?.({
+		// 	context: {
+		// 		query: `Events with @param or @notice similar to: ${prompt}`,
+		// 	},
+		// });
 
-		const structDocuments = await alloGithubSmartContract?.execute?.({
-			context: {
-				query: `Structs with @param or @notice similar to: ${prompt}`,
-			},
-		});
+		// const structDocuments = await alloGithubSmartContract?.execute?.({
+		// 	context: {
+		// 		query: `Structs with @param or @notice similar to: ${prompt}`,
+		// 	},
+		// });
 
-		const functionDocuments = await alloGithubSmartContract?.execute?.({
-			context: {
-				query: `Functions with @param or @notice similar to: ${prompt}`,
-			},
-		});
+		// const functionDocuments = await alloGithubSmartContract?.execute?.({
+		// 	context: {
+		// 		query: `Functions with @param or @notice similar to: ${prompt}`,
+		// 	},
+		// });
 
 		const docsResult = await dynamicGitcoinDocs?.execute?.({
 			context: { query: prompt },
 		});
 
 		const relevantSourceCode = [
-			eventDocuments?.context,
-			structDocuments?.context,
-			functionDocuments?.context,
+			// eventDocuments?.context,
+			// structDocuments?.context,
+			// functionDocuments?.context,
 			docsResult?.context,
 		]
 			.filter(
@@ -64,20 +65,26 @@ export const sourceCode = new Step({
 });
 
 // Step to fetch GraphQL schema
-export const fetchSchema = new Step({
-	id: "fetchSchema",
+export const fetchSchemaDefinition = new Step({
+	id: "fetchSchemaDefinition",
 	outputSchema: schemaOutput,
 	execute: async ({ context }) => {
-		const result = await graphqlIntrospection?.execute?.({ context: {} });
+		const prompt = context?.getStepResult<{ prompt: string }>(
+			"trigger",
+		)?.prompt;
 
-		if (!result?.success || !result.fullSchema) {
-			throw new Error(
-				`Failed to fetch GraphQL schema: ${result?.message || "Schema was empty"}`,
-			);
+		const result = await graphqlSourceTypes?.execute?.({
+			context: {
+				query: `Type definitions similar to: ${prompt}`,
+			},
+		});
+
+		if (!result?.context) {
+			throw new Error("Failed to fetch GraphQL schema types");
 		}
 
 		return {
-			schema: result.fullSchema,
+			schema: result.context,
 		};
 	},
 });
@@ -114,7 +121,7 @@ function getAndValidateInputData(
 	context: WorkflowContext,
 ): GenerateQueryInputData | null {
 	const prompt = context?.getStepResult<{ prompt: string }>("trigger")?.prompt;
-	const schemaResult = context.getStepResult(fetchSchema);
+	const schemaResult = context.getStepResult(fetchSchemaDefinition);
 	const sourceCodeResult = context.getStepResult(sourceCode);
 
 	const inputData = {

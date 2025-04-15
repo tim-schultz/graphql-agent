@@ -24,9 +24,17 @@ interface ChunkData {
 }
 
 /**
+ * Item structure for batch processing.
+ */
+export interface ProcessableItem {
+	content: string;
+	metadata: Record<string, unknown>; // Generic metadata object
+}
+
+/**
  * Processes content: splits into chunks, generates embeddings, and stores in a PostgreSQL database using Mastra.
  */
-export class MastraContentProcessor {
+export class ContentProcessor {
 	private embeddingModel: string;
 	private pgVector: PgVector;
 	private indexName: string;
@@ -214,6 +222,64 @@ export class MastraContentProcessor {
 	}
 
 	/**
+	 * Processes a batch of items, generates embeddings, and stores them.
+	 * @param items - An array of ProcessableItem objects.
+	 */
+	public async processAndEmbedBatch(items: ProcessableItem[]): Promise<void> {
+		if (!items || items.length === 0) {
+			logger.warn("No items provided in the batch. Skipping embedding.");
+			return;
+		}
+
+		this.status = {
+			status: "processing",
+			startTime: Date.now(),
+			chunksGenerated: items.length, // Each item is treated as one 'chunk' in this context
+			chunksStored: 0,
+			error: undefined,
+		};
+
+		try {
+			const contentsToEmbed = items.map((item) => item.content);
+			const metadataToStore = items.map((item) => item.metadata);
+
+			logger.info(
+				`Generating embeddings for ${contentsToEmbed.length} batch items using model: ${this.embeddingModel}...`,
+			);
+			const { embeddings } = await embedMany({
+				model: openai.embedding(this.embeddingModel),
+				values: contentsToEmbed,
+			});
+
+			if (!embeddings || embeddings.length !== items.length) {
+				throw new Error(
+					`Embedding count mismatch: expected ${items.length}, got ${embeddings?.length ?? 0}`,
+				);
+			}
+
+			logger.info(
+				`Storing ${embeddings.length} vectors with metadata in ${this.indexName}...`,
+			);
+			await this.pgVector.upsert({
+				indexName: this.indexName,
+				vectors: embeddings,
+				metadata: metadataToStore,
+			});
+
+			this.status.chunksStored = embeddings.length;
+			this.status.status = "completed";
+			logger.info(
+				`Successfully processed and stored batch of ${this.status.chunksStored} items.`,
+			);
+		} catch (e) {
+			this.status.status = "error";
+			this.status.error = e instanceof Error ? e.message : String(e);
+			logger.error(`Batch processing failed: ${this.status.error}`);
+			throw e; // Re-throw after setting status
+		}
+	}
+
+	/**
 	 * Process a single string - generate embedding and store in database.
 	 * @param text The string to process
 	 * @returns True if processing and storage was successful, false otherwise
@@ -318,8 +384,8 @@ export async function embedSingleString(
 			return false;
 		}
 
-		// Create an instance of MastraContentProcessor
-		const processor = new MastraContentProcessor(pgConnectionString, indexName);
+		// Create an instance of ContentProcessor
+		const processor = new ContentProcessor(pgConnectionString, indexName);
 
 		// Process and store the string
 		const success = await processor.processAndStoreSingleString(textToEmbed);

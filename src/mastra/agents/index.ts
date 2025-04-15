@@ -26,8 +26,8 @@ export const gqlExecutionAgent = new Agent({
     IMPORTANT: Only use known properties within your query
     `,
 	// model: openai("gpt-4.1-mini-2025-04-14"),
-	// model: anthropic("claude-3-7-sonnet-20250219"),
-	model: deepseek("deepseek-chat"),
+	model: anthropic("claude-3-7-sonnet-20250219"),
+	// model: deepseek("deepseek-chat"),
 });
 
 export const analysisAgent = new Agent({

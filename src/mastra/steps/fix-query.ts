@@ -3,7 +3,7 @@ import { z } from "zod";
 import { generateMermaidDiagram } from "../../scripts/diagram-gql-schema";
 import { gqlExecutionAgent } from "../agents";
 import { graphqlQuery } from "../tools";
-import { fetchSchema, sourceCode } from "./generate-query";
+import { fetchSchemaDefinition, sourceCode } from "./generate-query";
 import { fixQueryInputSchema, queryOutput } from "./types";
 
 // Define the structure of the trigger data expected by the fixQuery step
@@ -38,7 +38,7 @@ function validateInputData(
 	context: WorkflowContext,
 ): FixQueryTriggerData | null {
 	console.log("Validating input data for fixQuery...");
-	const schema = context.getStepResult(fetchSchema);
+	const schema = context.getStepResult(fetchSchemaDefinition);
 	const relevantSourceCode = context.getStepResult(sourceCode);
 	const inputData = {
 		prompt: context.triggerData.prompt,

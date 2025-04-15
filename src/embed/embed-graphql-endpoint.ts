@@ -323,19 +323,23 @@ async function embedGraphqlEndpoint(
 			);
 		}
 
-		const metadata = finalChunks
-			.map((chunk) => {
-				const typeMatch = chunk.title.match(/Type: (.+?)( \(part \d+\))?$/);
-				const typeName = typeMatch ? typeMatch[1] : null;
+		const metadata = finalChunks.map((chunk) => {
+			const typeMatch = chunk.title.match(/Type: (.+?)( \(part \d+\))?$/);
+			const typeName = typeMatch ? typeMatch[1] : null;
 
-				return {
-					text: chunk.content,
-					source: graphqlEndpoint,
-					title: chunk.title,
-					relatedEntities: typeName ? typeRelationships[typeName] || [] : [],
-				};
-			})
-			.filter((chunk) => chunk.relatedEntities.length > 0);
+			return {
+				text: chunk.content,
+				source: graphqlEndpoint,
+				title: chunk.title,
+				relatedEntities: typeName ? typeRelationships[typeName] || [] : [],
+			};
+		});
+		// Ensure metadata array length matches embeddings array length before upsert
+		if (metadata.length !== embeddings.length) {
+			throw new Error(
+				`Metadata count mismatch: expected ${embeddings.length}, got ${metadata.length}. This indicates an issue after processing chunks.`,
+			);
+		}
 
 		logger.info(`Storing ${embeddings.length} vectors in ${collectionName}...`);
 		await pgVector.upsert({

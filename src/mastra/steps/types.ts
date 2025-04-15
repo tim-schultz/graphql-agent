@@ -5,6 +5,10 @@ export const schemaOutput = z.object({
 	schema: z.string(),
 });
 
+export const typesOutput = z.object({
+	types: z.string(),
+});
+
 export const sourceCodeOutput = z.object({
 	relevantSourceCode: z.string(),
 });

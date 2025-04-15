@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import axios, { type AxiosInstance, type AxiosResponse } from "axios";
 import * as toml from "toml";
 
-import { MastraContentProcessor } from "./content-processor";
+import { ContentProcessor } from "./content-processor"; // Renamed import
 import { logger, withTimeout } from "./utils";
 
 // Fix for __dirname in ES modules
@@ -122,7 +122,7 @@ export class EtherscanEmbedder {
 	private contractAddress: string;
 	private status: EmbedStatus;
 	private client: AxiosInstance;
-	private contentProcessor: MastraContentProcessor;
+	private contentProcessor: ContentProcessor; // Renamed type
 
 	/**
 	 * Create a new EtherscanEmbedder
@@ -172,8 +172,9 @@ export class EtherscanEmbedder {
 			timeout: 60000, // 60 seconds timeout
 		});
 
-		// Initialize the Mastra content processor
-		this.contentProcessor = new MastraContentProcessor(
+		// Initialize the content processor
+		this.contentProcessor = new ContentProcessor(
+			// Renamed constructor call
 			pgConnectionString,
 			indexName,
 			{

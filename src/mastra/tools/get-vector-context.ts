@@ -27,7 +27,9 @@ export const vectorResponse = z.object({
 				.describe(
 					"The similarity score of the retrieved document with respect to the query. This indicates how relevant the document is to the query.",
 				),
-			metadata: z.object({}),
+			metadata: z.object({
+				content: z.string(),
+			}),
 		}),
 	),
 });
@@ -101,12 +103,25 @@ export const createVectorQueryTool = (
 					};
 				}
 
-				// Format results
-				const formattedResults = results.map((result) => ({
-					text: result.metadata?.text,
-					similarity: result.score,
-					metadata: { ...result.metadata },
-				}));
+				// Format results to match the expected output schema
+				const formattedResults = results.map((result) => {
+					// Ensure text is a string, provide default if missing or not a string
+					const text =
+						typeof result.metadata?.text === "string"
+							? result.metadata.text
+							: "";
+					// Ensure metadata.content is a string, provide default if missing or not a string
+					const content =
+						typeof result.metadata?.content === "string"
+							? result.metadata.content
+							: text; // Fallback to 'text' if 'content' is missing
+
+					return {
+						text: text, // Use the validated text
+						similarity: result.score,
+						metadata: { content: content }, // Construct the metadata object as expected
+					};
+				});
 
 				console.log(
 					`Found ${formattedResults.length} relevant results for query: "${query}"`,
