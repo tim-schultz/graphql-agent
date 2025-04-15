@@ -1,3 +1,3 @@
 # Generic Graphql Based Agents
 
-WIP
+Experimentation with Mastra Agents
