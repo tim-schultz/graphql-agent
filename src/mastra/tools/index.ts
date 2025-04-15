@@ -6,7 +6,7 @@ import { createGraphQLQueryTool } from "./query-graphql";
 const GITCOIN_INDEXER_API_URL =
 	process.env.GITCOIN_INDEXER_API_URL ||
 	"https://beta.indexer.gitcoin.co/v1/graphql";
-const POSTGRES_URL = process.env.POSTGRES_URL;
+export const POSTGRES_URL = process.env.POSTGRES_URL;
 const GITCOIN_DOCS_INDEX = process.env.GITCOIN_DOCS_INDEX || "gitcoin_docs";
 const GITCOIN_ALLO_SOURCE_CODE =
 	process.env.GITCOIN_DOCS_INDEX || "gitcoin_code_embeddings";
@@ -56,7 +56,7 @@ const dynamicGitcoinDocs = createVectorQueryTool(
 	{
 		description:
 			"Retrieve relevant information about the Gitcoin Grants ecosystem, how the protocol works, and how to get involved from a grantee, community member, or just an interested party",
-		topK: 1,
+		topK: 3,
 		threshold: 0.3,
 	},
 );

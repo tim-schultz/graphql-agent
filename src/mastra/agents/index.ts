@@ -1,3 +1,5 @@
+import { anthropic } from "@ai-sdk/anthropic";
+import { deepseek } from "@ai-sdk/deepseek";
 import { openai } from "@ai-sdk/openai";
 import { Agent } from "@mastra/core/agent";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
@@ -16,12 +18,16 @@ export const gqlIntrospectAgent = new Agent({
 });
 
 export const gqlExecutionAgent = new Agent({
-	name: "GraphQL Agent",
+	name: "GraphQL Execution Agent",
 	instructions: `
     You are an AI assistant tasked with executing GraphQL queries based on user questions, a provided GraphQL schema, and useful knowledge about the queried service.
     Your goal is to create a query that can be executed against a GraphQL server to answer the user's question.
+
+    IMPORTANT: Only use known properties within your query
     `,
-	model: openai("o3-mini-2025-01-31"),
+	// model: openai("gpt-4.1-mini-2025-04-14"),
+	// model: anthropic("claude-3-7-sonnet-20250219"),
+	model: deepseek("deepseek-chat"),
 });
 
 export const analysisAgent = new Agent({

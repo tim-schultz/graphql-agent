@@ -8,9 +8,10 @@ import {
 	graphqlQueryAgent,
 } from "./agents";
 import { fixQueryAnalysis, newQueryAnalysis } from "./workflows";
+import { graphqlAnalysis1 } from "./workflows/graphql-execution-1";
 
 export const mastra = new Mastra({
-	workflows: { newQueryAnalysis, fixQueryAnalysis },
+	workflows: { newQueryAnalysis, fixQueryAnalysis, graphqlAnalysis1 },
 	agents: {
 		gitcoinAgent,
 		gqlIntrospectAgent,

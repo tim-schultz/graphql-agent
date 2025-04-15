@@ -4,6 +4,7 @@ import { generateMermaidDiagram } from "../../scripts/diagram-gql-schema";
 import { gqlIntrospectAgent } from "../agents";
 import {
 	alloGithubSmartContract,
+	dynamicGitcoinDocs,
 	graphqlIntrospection,
 	graphqlQuery,
 } from "../tools";
@@ -40,10 +41,15 @@ export const sourceCode = new Step({
 			},
 		});
 
+		const docsResult = await dynamicGitcoinDocs?.execute?.({
+			context: { query: prompt },
+		});
+
 		const relevantSourceCode = [
 			eventDocuments?.context,
 			structDocuments?.context,
 			functionDocuments?.context,
+			docsResult?.context,
 		]
 			.filter(
 				(context) =>
@@ -242,6 +248,7 @@ Here's an example of how your output should be formatted:
 
 <example>
 User question: "What are the details for the Web3 Infrastructure round?"
+</example>
 
 <query>
 query getRoundDetails($roundId: String!, $chainId: Int!) {
@@ -271,7 +278,7 @@ query getRoundDetails($roundId: String!, $chainId: Int!) {
 <explanation>
 This query fetches details about the Web3 Infrastructure round (ID: 865) on the Arbitrum network (chainID: 42161). It includes key fields like application periods, donation periods, and metadata that will provide information about the round.
 </explanation>
-</example>
+
 
 Now, please generate a GraphQL query to answer the following question:
 

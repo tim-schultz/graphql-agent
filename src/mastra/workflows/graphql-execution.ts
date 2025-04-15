@@ -4,17 +4,6 @@ import { analyzeQuery, fixQuery, generateQuery } from "../steps";
 import { fetchSchema, sourceCode } from "../steps/generate-query";
 import { fixQueryInputSchema } from "../steps/types";
 
-const planInitialQuery = new Workflow({
-	name: "planInitialQuery",
-	triggerSchema: z.object({
-		prompt: z.string(),
-	}),
-})
-	.step(fetchSchema)
-	.then(sourceCode)
-	.then(generateQuery)
-	.commit();
-
 // Create a nested workflow to handle query execution
 const newQueryAnalysis = new Workflow({
 	name: "newQueryAnalysis",
@@ -51,4 +40,4 @@ const fixQueryAnalysis = new Workflow({
 	.commit();
 
 // Export both workflows
-export { newQueryAnalysis, fixQueryAnalysis, planInitialQuery };
+export { newQueryAnalysis, fixQueryAnalysis };
